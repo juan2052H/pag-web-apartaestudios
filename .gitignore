@@ -1,0 +1,10 @@
+# Datos en tiempo de ejecución: base de datos y archivos subidos (videos, fotos).
+# Se regeneran solos con datos de ejemplo la primera vez que arranca el servidor.
+datos/
+
+# Dependencias (el proyecto no usa ninguna, pero por si acaso)
+node_modules/
+
+# Sistema
+Thumbs.db
+.DS_Store

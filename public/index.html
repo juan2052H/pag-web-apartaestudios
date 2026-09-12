@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apartaestudios en arriendo · video y ubicación</title>
+<meta name="description" content="Encuentra apartaestudios disponibles: mira el video de cada unidad, ubica el edificio en el mapa y contacta directamente al encargado.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/publico.css">
+</head>
+<body>
+
+<header class="cabecera">
+  <div class="contenedor">
+    <a href="/" class="marca">
+      <span class="logo" aria-hidden="true">◈</span>
+      <span id="marca-nombre">Apartaestudios</span>
+    </a>
+    <nav class="nav">
+      <a href="#disponibles" class="oculta-chico">Disponibles</a>
+      <a href="#mapa-seccion" class="oculta-movil">Ubicación</a>
+      <a href="#edificios" class="oculta-movil">Edificios</a>
+      <a href="#contacto">Contacto</a>
+      <button class="icono-btn" id="btn-tema" type="button" aria-label="Cambiar tema">☾</button>
+      <a href="/admin" class="btn btn-sm" style="margin-left:6px">Admin</a>
+    </nav>
+  </div>
+</header>
+
+<main id="principal">
+
+  <!-- ---------------------------------------------------------------- Hero -->
+  <section class="hero">
+    <div class="contenedor">
+      <span class="pildora"><span class="punto"></span> <span id="pildora-texto">Cargando disponibilidad…</span></span>
+      <h1 id="titulo-hero">Apartaestudios que puedes ver antes de visitar.</h1>
+      <p class="lema" id="lema-hero">Cada unidad con su video real, la ubicación exacta del edificio y el contacto directo del encargado.</p>
+      <div class="hero-stats" id="hero-stats"></div>
+    </div>
+  </section>
+
+  <!-- -------------------------------------------------------- Disponibles -->
+  <section class="seccion" id="disponibles">
+    <div class="contenedor">
+      <div class="seccion-cabeza">
+        <div class="crece">
+          <h2>Unidades</h2>
+          <p>Filtra por edificio, precio o estado. Toca el video para verlo completo.</p>
+        </div>
+      </div>
+
+      <div class="filtros" role="search">
+        <div class="campo">
+          <label for="f-texto">Buscar</label>
+          <input type="search" id="f-texto" placeholder="Número, título, barrio…" autocomplete="off">
+        </div>
+        <div class="campo" style="flex:0 1 200px">
+          <label for="f-edificio">Edificio</label>
+          <select id="f-edificio"><option value="">Todos</option></select>
+        </div>
+        <div class="campo" style="flex:0 1 170px">
+          <label for="f-estado">Estado</label>
+          <select id="f-estado">
+            <option value="disponible">Solo disponibles</option>
+            <option value="">Todos los estados</option>
+            <option value="arrendado">Arrendados</option>
+            <option value="reservado">Reservados</option>
+          </select>
+        </div>
+        <div class="campo" style="flex:0 1 160px">
+          <label for="f-precio">Precio máximo</label>
+          <select id="f-precio"><option value="">Sin límite</option></select>
+        </div>
+        <div class="campo" style="flex:0 1 170px">
+          <label for="f-orden">Ordenar por</label>
+          <select id="f-orden">
+            <option value="recientes">Más recientes</option>
+            <option value="precio-asc">Precio: menor a mayor</option>
+            <option value="precio-desc">Precio: mayor a menor</option>
+            <option value="area-desc">Área: mayor a menor</option>
+          </select>
+        </div>
+        <div class="resultado" id="f-resultado" aria-live="polite"></div>
+      </div>
+
+      <div id="rejilla-aptos" class="rejilla">
+        <div class="cargando"><div class="spinner"></div><span>Cargando unidades…</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------------- Mapa -->
+  <section class="seccion" id="mapa-seccion" style="background:var(--superficie);border-block:1px solid var(--linea)">
+    <div class="contenedor">
+      <div class="seccion-cabeza">
+        <div class="crece">
+          <h2>Dónde quedan</h2>
+          <p>Ubicación real de cada edificio. Selecciona uno para centrar el mapa y ver sus unidades.</p>
+        </div>
+      </div>
+      <div class="mapa-zona">
+        <div class="lista-edificios" id="lista-edificios"></div>
+        <div id="mapa"><div class="mapa-caida">Cargando mapa…</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- Edificios -->
+  <section class="seccion" id="edificios">
+    <div class="contenedor">
+      <div class="seccion-cabeza">
+        <div class="crece">
+          <h2>Los edificios y sus encargados</h2>
+          <p>Habla directamente con quien administra el edificio: sin intermediarios ni comisiones ocultas.</p>
+        </div>
+      </div>
+      <div class="rejilla-ed" id="rejilla-edificios"></div>
+    </div>
+  </section>
+
+  <!-- ----------------------------------------------------------- Contacto -->
+  <section class="seccion" id="contacto" style="background:var(--superficie);border-top:1px solid var(--linea)">
+    <div class="contenedor">
+      <div class="contacto-zona">
+        <div>
+          <h2>¿Te interesa alguna unidad?</h2>
+          <p class="tenue" style="margin-top:12px;max-width:46ch">
+            Déjanos tus datos y el encargado del edificio te contacta para coordinar la visita.
+            También puedes escribirnos directamente.
+          </p>
+          <div id="contacto-directo" style="margin-top:22px;display:flex;flex-direction:column;gap:10px"></div>
+        </div>
+
+        <form class="tarjeta form-caja" id="form-contacto" novalidate>
+          <div class="campo">
+            <label for="c-apto">Unidad de interés</label>
+            <select id="c-apto" name="apartamentoId"><option value="">Cualquiera / aún no decido</option></select>
+          </div>
+          <div class="rejilla-campos">
+            <div class="campo">
+              <label for="c-nombre">Tu nombre *</label>
+              <input id="c-nombre" name="nombre" required autocomplete="name">
+            </div>
+            <div class="campo">
+              <label for="c-telefono">Teléfono / WhatsApp</label>
+              <input id="c-telefono" name="telefono" inputmode="tel" autocomplete="tel">
+            </div>
+          </div>
+          <div class="campo">
+            <label for="c-email">Correo</label>
+            <input id="c-email" name="email" type="email" autocomplete="email">
+          </div>
+          <div class="campo">
+            <label for="c-mensaje">Mensaje</label>
+            <textarea id="c-mensaje" name="mensaje" placeholder="¿Desde cuándo lo necesitas? ¿Alguna pregunta?"></textarea>
+          </div>
+          <div id="c-aviso"></div>
+          <button class="btn btn-primario btn-lg btn-bloque" type="submit">Enviar solicitud</button>
+          <p class="mini tenue centro" style="margin:0">Te responderemos en menos de 24 horas hábiles.</p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="pie">
+  <div class="contenedor">
+    <span id="pie-nombre">Apartaestudios</span>
+    <span class="tenue mini" id="pie-contacto"></span>
+    <a href="/admin" class="mini">Ingreso administrativo</a>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/js/comun.js"></script>
+<script src="/js/publico.js"></script>
+</body>
+</html>

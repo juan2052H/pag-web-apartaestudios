@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel administrativo · Apartaestudios</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/publico.css">
+<link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="admin">
+
+<!-- ------------------------------------------------------------- Acceso -->
+<div class="acceso" id="acceso" hidden>
+  <div class="acceso-caja">
+    <div class="logo">◈</div>
+    <h1>Panel administrativo</h1>
+    <p class="tenue mini">Gestiona unidades, videos, contratos y pagos.</p>
+    <form id="form-acceso">
+      <div class="campo">
+        <label for="a-usuario">Usuario</label>
+        <input id="a-usuario" name="usuario" autocomplete="username" value="admin" required>
+      </div>
+      <div class="campo">
+        <label for="a-clave">Contraseña</label>
+        <input id="a-clave" name="clave" type="password" autocomplete="current-password" required>
+      </div>
+      <div id="a-aviso"></div>
+      <button class="btn btn-primario btn-lg btn-bloque" type="submit">Entrar</button>
+    </form>
+    <p class="mini tenue centro" style="margin-top:18px">
+      <a href="/">← Volver al sitio público</a>
+    </p>
+  </div>
+</div>
+
+<!-- -------------------------------------------------------------- Panel -->
+<div class="panel" id="panel" hidden>
+
+  <aside class="lateral" id="lateral">
+    <a href="/" class="marca"><span class="logo">◈</span><span id="lat-nombre">Apartaestudios</span></a>
+
+    <button class="nav-item activo" data-vista="resumen"><span class="ic">◫</span> Resumen</button>
+    <button class="nav-item" data-vista="unidades"><span class="ic">⌂</span> Unidades</button>
+    <button class="nav-item" data-vista="edificios"><span class="ic">▤</span> Edificios</button>
+
+    <div class="grupo">Arriendos</div>
+    <button class="nav-item" data-vista="contratos"><span class="ic">✎</span> Contratos</button>
+    <button class="nav-item" data-vista="pagos"><span class="ic">◎</span> Pagos</button>
+    <button class="nav-item" data-vista="cartera"><span class="ic">⚑</span> Cartera</button>
+
+    <div class="grupo">Gestión</div>
+    <button class="nav-item" data-vista="solicitudes"><span class="ic">✉</span> Solicitudes<span class="globo" id="globo-solicitudes" hidden>0</span></button>
+    <button class="nav-item" data-vista="medios"><span class="ic">▶</span> Multimedia</button>
+    <button class="nav-item" data-vista="ajustes"><span class="ic">⚙</span> Ajustes</button>
+
+    <div class="pie-lateral">
+      <a class="nav-item" href="/" target="_blank"><span class="ic">↗</span> Ver sitio público</a>
+      <button class="nav-item" id="btn-salir"><span class="ic">⏻</span> Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <div class="contenido">
+    <div class="barra-superior">
+      <button class="icono-btn abrir-menu" id="btn-menu" type="button" aria-label="Abrir menú">☰</button>
+      <div>
+        <h1 id="titulo-vista">Resumen</h1>
+        <div class="sub" id="sub-vista"></div>
+      </div>
+      <div class="barra-acciones" id="acciones-vista"></div>
+      <button class="icono-btn" id="btn-tema" type="button" aria-label="Cambiar tema">☾</button>
+    </div>
+
+    <section class="vista activa" id="v-resumen"></section>
+    <section class="vista" id="v-unidades"></section>
+    <section class="vista" id="v-edificios"></section>
+    <section class="vista" id="v-contratos"></section>
+    <section class="vista" id="v-pagos"></section>
+    <section class="vista" id="v-cartera"></section>
+    <section class="vista" id="v-solicitudes"></section>
+    <section class="vista" id="v-medios"></section>
+    <section class="vista" id="v-ajustes"></section>
+  </div>
+</div>
+
+<div class="cargando" id="arranque"><div class="spinner"></div><span>Cargando panel…</span></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/js/comun.js"></script>
+<script src="/js/graficos.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>
