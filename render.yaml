@@ -1,0 +1,11 @@
+services:
+  - type: web
+    runtime: node
+    name: apartaestudios
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 20

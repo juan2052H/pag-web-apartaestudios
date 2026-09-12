@@ -1,7 +1,8 @@
 # Apartaestudios
 
 Sitio web para publicar apartaestudios en arriendo —con video, mapa y datos del
-encargado— más un panel administrativo para llevar contratos, pagos y analítica.
+encargado— más un panel administrativo para llevar contratos, pagos y analítica,
+y un portal privado para cada inquilino.
 
 No usa ninguna dependencia externa: solo Node.js y el navegador.
 
@@ -21,6 +22,7 @@ node server.js
 |---|---|
 | Sitio público | http://localhost:3000/ |
 | Panel administrativo | http://localhost:3000/admin |
+| Portal del inquilino | http://localhost:3000/inquilino |
 | Usuario inicial | `admin` |
 | Contraseña inicial | `admin123` — **cámbiala en Ajustes → Seguridad** |
 
@@ -53,15 +55,35 @@ contratos y su historial de pagos, para que puedas ver todo funcionando de una v
 
 | Sección | Para qué sirve |
 |---|---|
-| **Resumen** | Ocupación, ingreso mensual, recaudo del mes, cartera vencida, solicitudes nuevas. Gráfico de ingresos esperados vs. recaudados (12 meses) y ocupación por edificio. |
+| **Resumen** | Ocupación, ingreso mensual, recaudo del mes, cartera vencida, solicitudes nuevas, mensajes pendientes y contratos próximos a vencer. Gráfico de ingresos esperados vs. recaudados (12 meses) y ocupación por edificio. |
 | **Unidades** | Crear y editar apartaestudios, **subir el video y las fotos**, cambiar la disponibilidad desde la propia tarjeta. |
 | **Edificios** | Datos del edificio, zonas comunes, foto y **ficha del encargado**. La ubicación se fija haciendo clic en un mapa. |
 | **Contratos** | Quién arrienda qué, desde cuándo y por cuánto. Marca solo la unidad como arrendada. Historial de pagos por contrato. |
 | **Pagos** | Registro mes a mes, con método y referencia. Filtros por periodo y contrato. Exportación a CSV. |
 | **Cartera** | Meses sin pago completo por inquilino, saldo acumulado y botón de WhatsApp para cobrar. |
+| **Mensajes** | Envía avisos privados a un inquilino o a todos los inquilinos activos de un edificio: recordatorios de pago, convivencia/ruido, mantenimiento e información general. Incluye plantillas, prioridad y confirmación de lectura. |
 | **Solicitudes** | Interesados que llegaron por el sitio, con estado (nueva → contactada → visita → cerrada). |
 | **Multimedia** | Todos los videos y fotos subidos, cuánto ocupan y en qué unidad se usan. |
 | **Ajustes** | Nombre del sitio, contacto, moneda, cambio de usuario y contraseña, exportaciones. |
+
+## Portal del inquilino
+
+Cada contrato activo puede tener un acceso individual. Desde **Contratos → Activar
+portal**, la administración define una clave para el inquilino; este entra con su
+documento y esa clave en `/inquilino`.
+
+El portal muestra únicamente los datos de su propia unidad, contrato, estado del
+pago actual, historial de pagos, datos del encargado y mensajes privados. El
+inquilino también puede escribir a administración y marcar los avisos como leídos.
+Las claves se guardan derivadas con `scrypt`; no se guardan ni se devuelven en texto
+plano.
+
+### Avisos y vencimientos
+
+Desde **Mensajes** puedes elegir un inquilino individual o un edificio completo. El
+sistema crea una copia privada del aviso para cada contrato activo del edificio, sin
+exponer los datos de otros residentes. El resumen también lista los contratos que
+finalizan en los próximos 60 días y permite avisar al inquilino desde allí.
 
 ### Estados de una unidad
 
@@ -86,7 +108,7 @@ automáticamente; finalizarlo o cancelarlo la devuelve a *Disponible*.
 
 ```
 datos/
-  db.json        ← edificios, unidades, contratos, pagos, solicitudes, config
+  db.json        ← edificios, unidades, contratos, pagos, solicitudes, mensajes, config
   subidas/       ← los videos y las fotos, con su id como nombre
 ```
 
@@ -106,12 +128,15 @@ server.js              API + archivos estáticos + streaming de video (Node puro
 public/
   index.html           sitio público
   admin.html           panel administrativo
+  inquilino.html       portal privado del inquilino
   css/base.css         tokens de color, tema claro/oscuro, botones, formularios
   css/publico.css      estilos del sitio
   css/admin.css        estilos del panel
+  css/inquilino.css    estilos del portal del inquilino
   js/comun.js          utilidades compartidas: API, modales, formatos, tema
   js/publico.js        catálogo, mapa, ficha y solicitudes
   js/admin.js          todas las vistas del panel
+  js/inquilino.js      acceso, pagos y mensajería del inquilino
   js/graficos.js       gráficos en SVG, sin librerías
 ```
 
@@ -132,3 +157,11 @@ public/
 Esto está pensado para correr en una red local o detrás de un proxy. Si lo vas a
 exponer públicamente, pon un proxy con HTTPS delante (Caddy o Nginx), cambia la
 contraseña y considera limitar el número de intentos de acceso.
+
+### Demo rápida en Render
+
+El archivo `render.yaml` permite crear un **Web Service** desde el repositorio con
+el plan Free, `npm install` y `npm start`. Sirve para una demostración, pero Render
+elimina el contenido local de `datos/` al reiniciar o suspender el servicio. Para
+uso real, migra la base y los archivos subidos a almacenamiento persistente antes
+de publicar datos de inquilinos.

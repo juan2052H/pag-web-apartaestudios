@@ -12,7 +12,7 @@
   /** Estado en memoria del panel. */
   let E = {
     config: {}, edificios: [], apartamentos: [], contratos: [],
-    pagos: [], solicitudes: [], media: [], analitica: null,
+    pagos: [], solicitudes: [], mensajes: [], media: [], analitica: null,
   };
   let vistaActual = 'resumen';
 
@@ -102,6 +102,10 @@
       const g = $('#globo-solicitudes');
       g.hidden = !nuevas;
       g.textContent = nuevas;
+      const sinLeer = E.mensajes.filter((x) => x.tipo === 'inquilino' && !x.leidoAdmin).length;
+      const gm = $('#globo-mensajes');
+      gm.hidden = !sinLeer;
+      gm.textContent = sinLeer;
     } catch (e) {
       if (e.status === 401) { App.token.set(null); return mostrarAcceso(); }
       nota(e.message, 'error');
@@ -135,6 +139,7 @@
     contratos:   { titulo: 'Contratos', sub: 'Quién arrienda qué y por cuánto' },
     pagos:       { titulo: 'Pagos', sub: 'Recaudo mes a mes' },
     cartera:     { titulo: 'Cartera', sub: 'Saldos pendientes por inquilino' },
+    mensajes:    { titulo: 'Mensajes', sub: 'Comunicación privada con inquilinos' },
     solicitudes: { titulo: 'Solicitudes', sub: 'Interesados que llegaron por el sitio' },
     medios:      { titulo: 'Multimedia', sub: 'Videos y fotos subidos' },
     ajustes:     { titulo: 'Ajustes', sub: 'Datos del sitio y seguridad' },
@@ -161,7 +166,7 @@
     ({
       resumen: verResumen, unidades: verUnidades, edificios: verEdificios,
       contratos: verContratos, pagos: verPagos, cartera: verCartera,
-      solicitudes: verSolicitudes, medios: verMedios, ajustes: verAjustes,
+      mensajes: verMensajes, solicitudes: verSolicitudes, medios: verMedios, ajustes: verAjustes,
     })[v]();
   }
 
@@ -209,6 +214,10 @@
           `${esc(numero(k.otros))} en reserva o mantenimiento`)}
         ${kpi('Solicitudes nuevas', numero(k.solicitudesNuevas),
           k.solicitudesNuevas ? '<span class="delta-mal">Pendientes de contactar</span>' : 'Todo atendido')}
+        ${kpi('Mensajes sin leer', numero(k.mensajesSinLeer || 0),
+          k.mensajesSinLeer ? '<span class="delta-mal">Requieren respuesta</span>' : 'Bandeja al día')}
+        ${kpi('Contratos por vencer', numero(k.contratosPorVencer || 0),
+          k.contratosPorVencer ? '<span class="delta-mal">Vencen en los próximos 30 días</span>' : 'Sin vencimientos próximos')}
       </div>
 
       <div class="rejilla-graficos">
@@ -252,9 +261,28 @@
             </li>`).join('')}</ul>`
             : '<div class="cuerpo"><p class="tenue" style="margin:0">Todavía no llegan solicitudes desde el sitio público.</p></div>'}
         </div>
+      </div>
+
+      <div class="bloque-panel">
+        <header>
+          <div class="crece"><h3>Vencimientos de contrato</h3>
+            <p class="mini tenue" style="margin:2px 0 0">Contratos activos que terminan durante los próximos 60 días.</p></div>
+          <button class="btn btn-sm" type="button" data-ir="contratos">Gestionar contratos</button>
+        </header>
+        ${a.vencimientos?.length ? `<div class="tabla-marco"><table class="tabla">
+          <thead><tr><th>Inquilino</th><th>Unidad</th><th>Finaliza</th><th class="num">Faltan</th><th class="acciones"></th></tr></thead>
+          <tbody>${a.vencimientos.map((x) => `<tr>
+            <td style="font-weight:600">${esc(x.inquilino)}</td>
+            <td class="tenue">${esc(x.unidad)}</td>
+            <td>${esc(fechaTexto(x.fin))}</td>
+            <td class="num"><span class="chip ${x.dias <= 30 ? 'chip-vencido' : 'chip-reservado'}">${esc(numero(x.dias))} días</span></td>
+            <td class="acciones"><button class="btn btn-sm btn-primario" type="button" data-mensaje-ct="${esc(x.contratoId)}">Avisar</button></td>
+          </tr>`).join('')}</tbody></table></div>`
+          : '<div class="cuerpo"><p class="tenue" style="margin:0">No hay contratos próximos a vencer.</p></div>'}
       </div>`;
 
     $$('#v-resumen [data-ir]').forEach((b) => b.addEventListener('click', () => irA(b.dataset.ir)));
+    $$('#v-resumen [data-mensaje-ct]').forEach((b) => b.addEventListener('click', () => formMensaje(b.dataset.mensajeCt)));
 
     const c = Graficos.colores();
     Graficos.barrasAgrupadas($('#g-ingresos'), {
@@ -873,6 +901,8 @@
               <td class="acciones">
                 <button class="btn btn-sm btn-primario" type="button" data-pago="${esc(c.id)}">Pago</button>
                 <button class="btn btn-sm" type="button" data-hist="${esc(c.id)}">Historial</button>
+                <button class="btn btn-sm" type="button" data-mensaje="${esc(c.id)}">Mensaje</button>
+                <button class="btn btn-sm" type="button" data-portal="${esc(c.id)}">${c.portal?.activo ? 'Portal' : 'Activar portal'}</button>
                 <button class="btn btn-sm" type="button" data-editar="${esc(c.id)}">Editar</button>
                 <button class="btn btn-sm btn-peligro" type="button" data-borrar="${esc(c.id)}">✕</button>
               </td>
@@ -885,6 +915,8 @@
 
     $$('#v-contratos [data-pago]').forEach((b) => b.addEventListener('click', () => formPago(null, b.dataset.pago)));
     $$('#v-contratos [data-hist]').forEach((b) => b.addEventListener('click', () => verHistorial(b.dataset.hist)));
+    $$('#v-contratos [data-mensaje]').forEach((b) => b.addEventListener('click', () => formMensaje(b.dataset.mensaje)));
+    $$('#v-contratos [data-portal]').forEach((b) => b.addEventListener('click', () => formPortalInquilino(b.dataset.portal)));
     $$('#v-contratos [data-editar]').forEach((b) => b.addEventListener('click', () => formContrato(contrato(b.dataset.editar))));
     $$('#v-contratos [data-borrar]').forEach((b) => b.addEventListener('click', async () => {
       const c = contrato(b.dataset.borrar);
@@ -1028,6 +1060,195 @@
       alAbrir: (caja, cerrar) => {
         caja.querySelector('[data-nuevo]').addEventListener('click', () => { cerrar(); formPago(null, ctId); });
       },
+    });
+  }
+
+  /* ================================================== Portal del inquilino */
+
+  function formPortalInquilino(ctId) {
+    const c = contrato(ctId);
+    if (!c) return;
+    if (!c.inquilino?.documento) {
+      nota('Registra el documento del inquilino antes de activar su portal.', 'error');
+      return;
+    }
+    const activo = !!c.portal?.activo;
+    const m = modal({
+      titulo: 'Acceso del inquilino',
+      tamano: 'sm',
+      cuerpo: `<div class="aviso" style="margin-bottom:16px">
+          El acceso se identifica con el documento de <strong>${esc(c.inquilino?.nombre)}</strong>. La clave se guarda protegida y no se puede consultar después.
+        </div>
+        <form id="f-portal-inq">
+          <label class="check"><input id="pi-activo" type="checkbox" ${activo ? 'checked' : ''}>
+            Permitir acceso al portal del inquilino</label>
+          <div class="campo" style="margin-top:14px">
+            <label for="pi-clave">${activo ? 'Nueva clave (solo si deseas cambiarla)' : 'Clave de acceso *'}</label>
+            <input id="pi-clave" name="clave" type="password" minlength="6" autocomplete="new-password"
+              placeholder="Mínimo 6 caracteres">
+            <span class="ayuda">El inquilino entra desde <strong>/inquilino</strong> con su documento y esta clave.</span>
+          </div>
+        </form>`,
+      pie: `<button class="btn" type="button" data-cancelar>Cancelar</button>
+            <button class="btn btn-primario" type="button" data-guardar>${activo ? 'Guardar acceso' : 'Activar portal'}</button>`,
+    });
+    m.caja.querySelector('[data-cancelar]').addEventListener('click', m.cerrar);
+    m.caja.querySelector('[data-guardar]').addEventListener('click', async (ev) => {
+      const permitir = m.caja.querySelector('#pi-activo').checked;
+      const clave = m.caja.querySelector('#pi-clave').value;
+      if (permitir && !activo && clave.length < 6) {
+        nota('Define una clave de al menos 6 caracteres.', 'error');
+        return;
+      }
+      if (permitir && activo && !clave) { m.cerrar(); return; }
+      ev.target.disabled = true;
+      try {
+        await operar(() => api(`/api/contratos/${c.id}/portal`, {
+          method: 'POST', body: permitir ? { activo: true, clave } : { activo: false },
+        }), permitir ? 'Acceso del portal guardado' : 'Acceso del portal desactivado');
+        m.cerrar();
+      } catch { ev.target.disabled = false; }
+    });
+  }
+
+  /* ================================================================ Mensajes */
+
+  const plantillasMensajes = {
+    pago: {
+      asunto: 'Recordatorio de pago', categoria: 'pago', prioridad: 'alta',
+      cuerpo: 'Te recordamos que el pago mensual de tu apartaestudio está próximo a vencer. Por favor confirma cuando realices la transferencia o comunícate con administración si necesitas apoyo.',
+    },
+    convivencia: {
+      asunto: 'Aviso de convivencia', categoria: 'convivencia', prioridad: 'alta',
+      cuerpo: 'Hemos recibido una observación relacionada con ruido o convivencia. Te pedimos revisar las normas del edificio y evitar situaciones que afecten el descanso de los vecinos. Si deseas dar tu versión, responde por este medio.',
+    },
+    general: {
+      asunto: 'Información de administración', categoria: 'general', prioridad: 'normal',
+      cuerpo: 'Tenemos información importante para ti sobre el edificio y tu apartaestudio.',
+    },
+    edificio: {
+      asunto: 'Aviso importante del edificio', categoria: 'mantenimiento', prioridad: 'normal',
+      cuerpo: 'Te informamos una novedad programada en el edificio. Agradecemos tomar las precauciones necesarias. Si tienes alguna inquietud, responde a este mensaje.',
+    },
+  };
+
+  function verMensajes() {
+    accion('Nuevo mensaje', () => formMensaje());
+    const mensajes = [...E.mensajes].sort((a, b) => String(b.creado).localeCompare(String(a.creado)));
+    const sinLeer = mensajes.filter((x) => x.tipo === 'inquilino' && !x.leidoAdmin).length;
+
+    $('#v-mensajes').innerHTML = mensajes.length ? `
+      <div class="aviso" style="margin-bottom:18px">
+        Los mensajes llegan al portal privado del inquilino. ${sinLeer ? `<strong>${sinLeer} requieren revisión.</strong>` : 'No tienes mensajes nuevos.'}
+      </div>
+      <div class="bloque-panel"><ul class="lista-simple lista-mensajes">
+        ${mensajes.map((x) => {
+          const c = contrato(x.contratoId);
+          const esInquilino = x.tipo === 'inquilino';
+          const noLeido = esInquilino ? !x.leidoAdmin : !x.leidoInquilino;
+          return `<li class="mensaje ${noLeido ? 'sin-leer' : ''}">
+            <div class="mensaje-tipo">${esInquilino ? 'INQ' : 'ADM'}</div>
+            <div class="crece">
+              <div class="fila-wrap" style="gap:7px">
+                <strong>${esc(x.asunto || 'Sin asunto')}</strong>
+                ${x.prioridad === 'alta' ? '<span class="chip chip-vencido">Prioridad alta</span>' : ''}
+                ${noLeido ? '<span class="chip chip-reservado">Sin leer</span>' : ''}
+              </div>
+              <div class="mini tenue" style="margin-top:3px">
+                ${esInquilino ? 'De' : 'Para'} ${esc(c?.inquilino?.nombre || 'Contrato eliminado')} · ${esc(c ? nombreUnidad(apartamento(c.apartamentoId)) : '—')} · ${esc(fechaTexto(x.creado))}
+              </div>
+              <p class="mensaje-cuerpo">${esc(x.cuerpo)}</p>
+            </div>
+            <div class="pila mensaje-acciones">
+              ${esInquilino && noLeido ? `<button class="btn btn-sm" type="button" data-leer="${esc(x.id)}">Marcar leído</button>` : ''}
+              ${c ? `<button class="btn btn-sm btn-primario" type="button" data-responder="${esc(c.id)}">Responder</button>` : ''}
+              <button class="btn btn-sm btn-peligro" type="button" data-borrar-mensaje="${esc(x.id)}" aria-label="Eliminar mensaje">×</button>
+            </div>
+          </li>`;
+        }).join('')}
+      </ul></div>`
+      : `<div class="vacio"><h3>Sin mensajes todavía</h3>
+           <p>Envía un mensaje desde aquí para que el inquilino lo vea en su portal privado.</p></div>`;
+
+    $$('#v-mensajes [data-responder]').forEach((b) => b.addEventListener('click', () => formMensaje(b.dataset.responder)));
+    $$('#v-mensajes [data-leer]').forEach((b) => b.addEventListener('click', async () => {
+      await operar(() => api(`/api/mensajes/${b.dataset.leer}/leido`, { method: 'PUT' }), 'Mensaje marcado como leído');
+    }));
+    $$('#v-mensajes [data-borrar-mensaje]').forEach((b) => b.addEventListener('click', async () => {
+      if (!(await confirmar('¿Eliminar este mensaje del historial?', { titulo: 'Eliminar mensaje', textoOk: 'Eliminar' }))) return;
+      await operar(() => api('/api/mensajes/' + b.dataset.borrarMensaje, { method: 'DELETE' }), 'Mensaje eliminado');
+    }));
+  }
+
+  function formMensaje(contratoPrevio = '') {
+    const contratos = E.contratos.filter((c) => c.estado === 'activo');
+    if (!contratos.length) {
+      nota('Necesitas un contrato activo para enviar un mensaje.', 'error');
+      return;
+    }
+    const m = modal({
+      titulo: 'Mensaje a inquilinos',
+      tamano: 'md',
+      cuerpo: `<div class="plantillas-mensaje" aria-label="Plantillas rápidas">
+          <span class="mini tenue">Usar plantilla:</span>
+          <button type="button" class="btn btn-sm" data-plantilla="pago">Recordatorio de pago</button>
+          <button type="button" class="btn btn-sm" data-plantilla="convivencia">Convivencia / ruido</button>
+          <button type="button" class="btn btn-sm" data-plantilla="general">Información general</button>
+          <button type="button" class="btn btn-sm" data-plantilla="edificio">Novedad del edificio</button>
+        </div>
+        <form id="f-mensaje" style="margin-top:16px">
+          <div class="campo"><label for="m-destinatario">Destinatario *</label><select id="m-destinatario" name="destinatario" required>
+            <option value="">Selecciona…</option>
+            <optgroup label="Inquilino individual">
+              ${contratos.map((c) => `<option value="contrato:${esc(c.id)}" ${c.id === contratoPrevio ? 'selected' : ''}>${esc(c.inquilino?.nombre || '—')} · ${esc(nombreUnidad(apartamento(c.apartamentoId)))}</option>`).join('')}
+            </optgroup>
+            <optgroup label="Aviso para todo un edificio">
+              ${E.edificios.map((e) => {
+                const cantidad = contratos.filter((c) => apartamento(c.apartamentoId)?.edificioId === e.id).length;
+                return cantidad ? `<option value="edificio:${esc(e.id)}">${esc(e.nombre)} · ${cantidad} inquilino${cantidad === 1 ? '' : 's'}</option>` : '';
+              }).join('')}
+            </optgroup>
+          </select></div>
+          <p class="mini tenue" style="margin:6px 0 0">Los avisos por edificio se entregan de forma privada a cada inquilino activo.</p>
+          <div class="rejilla-campos" style="margin-top:14px">
+            <div class="campo"><label for="m-asunto">Asunto *</label><input id="m-asunto" name="asunto" required maxlength="160" placeholder="Ej. Recordatorio de pago"></div>
+            <div class="campo"><label for="m-categoria">Categoría</label><select id="m-categoria" name="categoria">
+              <option value="general">General</option><option value="pago">Pago</option><option value="convivencia">Convivencia</option><option value="mantenimiento">Mantenimiento</option>
+            </select></div>
+            <label class="check" style="align-self:end"><input id="m-prioridad" name="prioridad" type="checkbox"> Prioridad alta</label>
+          </div>
+          <div class="campo" style="margin-top:14px"><label for="m-cuerpo">Mensaje *</label>
+            <textarea id="m-cuerpo" name="cuerpo" required maxlength="1500" rows="7" placeholder="Escribe un mensaje claro y respetuoso."></textarea></div>
+        </form>`,
+      pie: `<button class="btn" type="button" data-cancelar>Cancelar</button>
+            <button class="btn btn-primario" type="button" data-enviar>Enviar al portal</button>`,
+    });
+    m.caja.querySelector('[data-cancelar]').addEventListener('click', m.cerrar);
+    m.caja.querySelectorAll('[data-plantilla]').forEach((b) => b.addEventListener('click', () => {
+      const p = plantillasMensajes[b.dataset.plantilla];
+      m.caja.querySelector('#m-asunto').value = p.asunto;
+      m.caja.querySelector('#m-categoria').value = p.categoria;
+      m.caja.querySelector('#m-prioridad').checked = p.prioridad === 'alta';
+      m.caja.querySelector('#m-cuerpo').value = p.cuerpo;
+    }));
+    m.caja.querySelector('[data-enviar]').addEventListener('click', async (ev) => {
+      const form = m.caja.querySelector('#f-mensaje');
+      if (!form.reportValidity()) return;
+      const d = Object.fromEntries(new FormData(form).entries());
+      const [tipoDestinatario, idDestinatario] = String(d.destinatario || '').split(':');
+      if (!idDestinatario) return;
+      ev.target.disabled = true;
+      try {
+        const r = await operar(() => api('/api/mensajes', {
+          method: 'POST', body: {
+            asunto: d.asunto, cuerpo: d.cuerpo, categoria: d.categoria,
+            prioridad: d.prioridad ? 'alta' : 'normal',
+            ...(tipoDestinatario === 'edificio' ? { edificioId: idDestinatario } : { contratoId: idDestinatario }),
+          },
+        }));
+        nota(r.enviados > 1 ? `Aviso enviado a ${r.enviados} inquilinos` : 'Mensaje enviado al portal del inquilino', 'bien');
+        m.cerrar();
+      } catch { ev.target.disabled = false; }
     });
   }
 

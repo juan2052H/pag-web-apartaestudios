@@ -91,6 +91,16 @@ function aPeriodo(fecha) {
   return s.length >= 7 ? s.slice(0, 7) : null;
 }
 
+/** Días naturales desde hoy hasta una fecha ISO. Devuelve null si no es válida. */
+function diasHasta(fecha) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha || ''))) return null;
+  const destino = new Date(`${fecha}T12:00:00`);
+  if (Number.isNaN(destino.getTime())) return null;
+  const base = new Date();
+  base.setHours(12, 0, 0, 0);
+  return Math.round((destino.getTime() - base.getTime()) / 86400000);
+}
+
 /** Lista de periodos "YYYY-MM" inclusive entre dos periodos */
 function periodosEntre(desde, hasta) {
   const out = [];
@@ -270,6 +280,7 @@ function dbPorDefecto() {
     contratos,
     pagos,
     solicitudes: [],
+    mensajes: [],
     media: [],
   };
 }
@@ -285,7 +296,7 @@ async function cargarDb() {
     console.log('  · Base de datos creada con datos de ejemplo.');
   }
   // Normaliza colecciones faltantes
-  for (const k of ['edificios', 'apartamentos', 'contratos', 'pagos', 'solicitudes', 'media']) {
+  for (const k of ['edificios', 'apartamentos', 'contratos', 'pagos', 'solicitudes', 'mensajes', 'media']) {
     if (!Array.isArray(db[k])) db[k] = [];
   }
   db.config = Object.assign({}, dbPorDefecto().config, db.config || {});
@@ -309,6 +320,7 @@ async function guardarDb() {
 // ---------------------------------------------------------------------------
 
 const sesiones = new Map(); // token -> { usuario, expira }
+const sesionesInquilino = new Map(); // token -> { contratoId, expira }
 
 function crearSesion(usuario) {
   const token = crypto.randomBytes(32).toString('hex');
@@ -327,9 +339,27 @@ function sesionDe(req) {
   return { token, ...s };
 }
 
+function crearSesionInquilino(contratoId) {
+  const token = crypto.randomBytes(32).toString('hex');
+  sesionesInquilino.set(token, { contratoId, expira: Date.now() + DURACION_SESION });
+  return token;
+}
+
+function sesionInquilinoDe(req) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (!token) return null;
+  const s = sesionesInquilino.get(token);
+  if (!s) return null;
+  if (s.expira < Date.now()) { sesionesInquilino.delete(token); return null; }
+  s.expira = Date.now() + DURACION_SESION;
+  return { token, ...s };
+}
+
 setInterval(() => {
   const t = Date.now();
   for (const [k, v] of sesiones) if (v.expira < t) sesiones.delete(k);
+  for (const [k, v] of sesionesInquilino) if (v.expira < t) sesionesInquilino.delete(k);
 }, 15 * 60 * 1000).unref();
 
 // ---------------------------------------------------------------------------
@@ -521,6 +551,24 @@ function calcularAnalitica(meses = 12) {
   }
   cartera.sort((a, b) => b.saldo - a.saldo);
 
+  // Contratos que requieren gestión antes de que termine su vigencia.
+  const vencimientos = activos
+    .filter((c) => c.estado === 'activo' && c.fin)
+    .map((c) => {
+      const dias = diasHasta(c.fin);
+      const apt = db.apartamentos.find((a) => a.id === c.apartamentoId);
+      const ed = apt && db.edificios.find((e) => e.id === apt.edificioId);
+      return {
+        contratoId: c.id,
+        inquilino: c.inquilino?.nombre || '—',
+        unidad: apt ? `${ed ? ed.nombre + ' · ' : ''}${apt.numero}` : '—',
+        fin: c.fin,
+        dias,
+      };
+    })
+    .filter((x) => x.dias !== null && x.dias >= 0 && x.dias <= 60)
+    .sort((a, b) => a.dias - b.dias);
+
   // Ocupación por edificio
   const porEdificio = db.edificios.map((e) => {
     const us = db.apartamentos.filter((a) => a.edificioId === e.id);
@@ -563,12 +611,15 @@ function calcularAnalitica(meses = 12) {
       carteraTotal: cartera.reduce((s, c) => s + c.saldo, 0),
       contratosActivos: activos.filter((c) => contratoActivoEn(c, hoy)).length,
       solicitudesNuevas: db.solicitudes.filter((s) => s.estado === 'nueva').length,
+      mensajesSinLeer: db.mensajes.filter((x) => x.tipo === 'inquilino' && !x.leidoAdmin).length,
+      contratosPorVencer: vencimientos.filter((x) => x.dias <= 30).length,
       canonPromedio: arrendados
         ? Math.round(activos.filter((c) => contratoActivoEn(c, hoy)).reduce((s, c) => s + num(c.canon), 0) / Math.max(1, activos.filter((c) => contratoActivoEn(c, hoy)).length))
         : 0,
     },
     serie,
     cartera,
+    vencimientos,
     porEdificio,
   };
 }
@@ -634,6 +685,9 @@ function sanearApartamento(b, previo = {}) {
 
 function sanearContrato(b, previo = {}) {
   const inq = b.inquilino || previo.inquilino || {};
+  // Las credenciales del portal se gestionan en su endpoint dedicado. Nunca
+  // viajan en las ediciones generales de un contrato ni regresan al navegador.
+  const portalPrevio = previo.portal || {};
   return {
     id: previo.id || id(),
     apartamentoId: texto(b.apartamentoId, 40) || previo.apartamentoId || '',
@@ -650,6 +704,12 @@ function sanearContrato(b, previo = {}) {
     diaPago: Math.min(31, Math.max(1, num(b.diaPago, 5))),
     estado: ['activo', 'finalizado', 'cancelado'].includes(b.estado) ? b.estado : (previo.estado || 'activo'),
     notas: texto(b.notas, 2000),
+    portal: {
+      activo: !!portalPrevio.activo,
+      sal: texto(portalPrevio.sal, 80),
+      hash: texto(portalPrevio.hash, 160),
+      actualizado: texto(portalPrevio.actualizado, 40),
+    },
     creado: previo.creado || ahora(),
     actualizado: ahora(),
   };
@@ -696,6 +756,66 @@ function vistaPublica() {
   };
 }
 
+function documentoNormalizado(valor) {
+  return texto(valor, 80).replace(/[\s.\-]/g, '').toLowerCase();
+}
+
+/** Oculta los hashes de acceso incluso dentro de la respuesta administrativa. */
+function vistaContratoAdmin(c) {
+  const portal = c.portal || {};
+  return {
+    ...c,
+    portal: {
+      activo: !!portal.activo,
+      actualizado: portal.actualizado || '',
+    },
+  };
+}
+
+function vistaPortalInquilino(c) {
+  const apt = db.apartamentos.find((a) => a.id === c.apartamentoId) || {};
+  const ed = db.edificios.find((e) => e.id === apt.edificioId) || {};
+  const periodo = mesActual();
+  const pagadoMes = db.pagos
+    .filter((p) => p.contratoId === c.id && p.periodo === periodo)
+    .reduce((s, p) => s + num(p.monto), 0);
+  const deuda = calcularAnalitica(12).cartera.find((x) => x.contratoId === c.id);
+  const mensajes = db.mensajes
+    .filter((x) => x.contratoId === c.id)
+    .sort((a, b) => String(b.creado).localeCompare(String(a.creado)))
+    .slice(0, 100)
+    .map((x) => ({
+      id: x.id, asunto: x.asunto, cuerpo: x.cuerpo, tipo: x.tipo,
+      prioridad: x.prioridad, categoria: x.categoria, creado: x.creado,
+      leidoInquilino: !!x.leidoInquilino,
+    }));
+
+  return {
+    contrato: {
+      id: c.id, inicio: c.inicio, fin: c.fin, canon: c.canon, deposito: c.deposito,
+      diaPago: c.diaPago, estado: c.estado,
+      inquilino: { nombre: c.inquilino?.nombre || '', email: c.inquilino?.email || '' },
+    },
+    apartamento: {
+      numero: apt.numero || '', titulo: apt.titulo || '', area: apt.area || 0,
+      habitaciones: apt.habitaciones || 0, banos: apt.banos || 0, piso: apt.piso || 0,
+      descripcion: apt.descripcion || '',
+    },
+    edificio: {
+      nombre: ed.nombre || '', direccion: ed.direccion || '', ciudad: ed.ciudad || '',
+      encargado: ed.encargado || {},
+    },
+    pagoActual: {
+      periodo, canon: num(c.canon), pagado: pagadoMes,
+      pendiente: Math.max(0, num(c.canon) - pagadoMes), diaPago: c.diaPago,
+    },
+    cartera: deuda ? { saldo: deuda.saldo, meses: deuda.meses } : { saldo: 0, meses: [] },
+    pagos: db.pagos.filter((p) => p.contratoId === c.id)
+      .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).slice(0, 36),
+    mensajes,
+  };
+}
+
 const coleccion = {
   edificios: { arr: () => db.edificios, sanear: sanearEdificio },
   apartamentos: { arr: () => db.apartamentos, sanear: sanearApartamento },
@@ -734,6 +854,75 @@ async function manejarApi(req, res, url) {
     db.solicitudes.unshift(s);
     await guardarDb();
     return json(res, 201, { ok: true, id: s.id });
+  }
+
+  // ---- Portal del inquilino ---------------------------------------------
+  if (seccion === 'inquilino') {
+    if (recurso === 'login' && m === 'POST') {
+      const b = await leerJson(req);
+      const documento = documentoNormalizado(b.documento);
+      const c = db.contratos.find((x) =>
+        x.estado === 'activo' && contratoActivoEn(x, mesActual()) &&
+        x.portal?.activo && documento &&
+        documentoNormalizado(x.inquilino?.documento) === documento &&
+        verificarClave(b.clave || '', x.portal?.sal, x.portal?.hash));
+      await new Promise((r) => setTimeout(r, 250));
+      if (!c) return error(res, 401, 'Documento o clave incorrectos.');
+      return ok(res, {
+        token: crearSesionInquilino(c.id),
+        nombre: c.inquilino?.nombre || 'Inquilino',
+      });
+    }
+
+    const s = sesionInquilinoDe(req);
+    if (recurso === 'sesion' && m === 'GET') {
+      if (!s) return error(res, 401, 'Sesión expirada');
+      const c = db.contratos.find((x) => x.id === s.contratoId);
+      return c?.portal?.activo && c.estado === 'activo'
+        ? ok(res, { nombre: c.inquilino?.nombre || 'Inquilino' })
+        : error(res, 401, 'Acceso no disponible');
+    }
+    if (recurso === 'logout' && m === 'POST') {
+      if (s) sesionesInquilino.delete(s.token);
+      return ok(res);
+    }
+    if (!s) return error(res, 401, 'No autorizado');
+    const c = db.contratos.find((x) => x.id === s.contratoId);
+    if (!c || !c.portal?.activo || c.estado !== 'activo') return error(res, 401, 'Acceso no disponible');
+
+    if (recurso === 'panel' && m === 'GET') return ok(res, vistaPortalInquilino(c));
+
+    if (recurso === 'mensajes' && m === 'POST') {
+      const b = await leerJson(req);
+      const cuerpo = texto(b.cuerpo, 1500).trim();
+      if (!cuerpo) return error(res, 400, 'Escribe el mensaje que quieres enviar.');
+      const categorias = ['pago', 'mantenimiento', 'convivencia', 'otro'];
+      const reg = {
+        id: id(), contratoId: c.id,
+        asunto: texto(b.asunto, 160).trim() || 'Mensaje del inquilino',
+        cuerpo,
+        tipo: 'inquilino',
+        categoria: categorias.includes(b.categoria) ? b.categoria : 'otro',
+        prioridad: b.prioridad === 'alta' ? 'alta' : 'normal',
+        leidoAdmin: false, leidoInquilino: true, creado: ahora(),
+      };
+      db.mensajes.unshift(reg);
+      await guardarDb();
+      return json(res, 201, { ok: true, mensaje: reg });
+    }
+
+    if (recurso === 'mensajes' && partes[3] && partes[4] === 'leido' && m === 'PUT') {
+      const msg = db.mensajes.find((x) => x.id === partes[3] && x.contratoId === c.id);
+      if (!msg) return error(res, 404, 'Mensaje no encontrado');
+      if (msg.tipo === 'administracion') {
+        msg.leidoInquilino = true;
+        msg.leidoInquilinoEn = ahora();
+        await guardarDb();
+      }
+      return ok(res);
+    }
+
+    return error(res, 404, 'Ruta del portal desconocida');
   }
 
   // ---- Autenticación -----------------------------------------------------
@@ -835,9 +1024,10 @@ async function manejarApi(req, res, url) {
       config: { ...db.config, adminSal: undefined, adminHash: undefined },
       edificios: db.edificios,
       apartamentos: db.apartamentos,
-      contratos: db.contratos,
+      contratos: db.contratos.map(vistaContratoAdmin),
       pagos: db.pagos,
       solicitudes: db.solicitudes,
+      mensajes: db.mensajes,
       media: db.media.map((x) => ({ ...x, url: `/api/media/${x.id}` })),
       analitica: calcularAnalitica(12),
     });
@@ -875,29 +1065,107 @@ async function manejarApi(req, res, url) {
     }
   }
 
+  // Credenciales del portal: se guardan derivadas, nunca en texto plano.
+  if (seccion === 'contratos' && recurso && partes[3] === 'portal' && m === 'POST') {
+    const c = db.contratos.find((x) => x.id === recurso);
+    if (!c) return error(res, 404, 'Contrato no encontrado');
+    const b = await leerJson(req);
+    if (b.activo === false) {
+      c.portal = { activo: false, sal: '', hash: '', actualizado: ahora() };
+      await guardarDb();
+      return ok(res, { activo: false });
+    }
+    if (String(b.clave || '').length < 6) {
+      return error(res, 400, 'La clave del portal debe tener al menos 6 caracteres.');
+    }
+    const credencial = hashClave(b.clave);
+    c.portal = { activo: true, sal: credencial.sal, hash: credencial.hash, actualizado: ahora() };
+    await guardarDb();
+    return ok(res, { activo: true, actualizado: c.portal.actualizado });
+  }
+
+  // Mensajes entre administración e inquilinos. El tipo se decide en el
+  // servidor para impedir que un cliente suplante al administrador.
+  if (seccion === 'mensajes') {
+    if (m === 'GET') return ok(res, db.mensajes);
+    if (m === 'POST' && !recurso) {
+      const b = await leerJson(req);
+      const cuerpo = texto(b.cuerpo, 1500).trim();
+      if (!cuerpo) return error(res, 400, 'Escribe el mensaje que quieres enviar.');
+      const contratoId = texto(b.contratoId, 40);
+      const edificioId = texto(b.edificioId, 40);
+      let destinos = [];
+      if (contratoId) {
+        const c = db.contratos.find((x) => x.id === contratoId);
+        if (c && c.estado === 'activo' && contratoActivoEn(c, mesActual())) destinos = [c];
+      } else if (edificioId) {
+        if (!db.edificios.some((e) => e.id === edificioId)) return error(res, 400, 'Selecciona un edificio válido.');
+        destinos = db.contratos.filter((c) => {
+          const apt = db.apartamentos.find((a) => a.id === c.apartamentoId);
+          return c.estado === 'activo' && contratoActivoEn(c, mesActual()) && apt?.edificioId === edificioId;
+        });
+      }
+      if (!destinos.length) return error(res, 400, 'No hay inquilinos activos para ese destinatario.');
+      const creado = ahora();
+      const registros = destinos.map((c) => ({
+        id: id(), contratoId: c.id,
+        asunto: texto(b.asunto, 160).trim() || 'Mensaje de administración',
+        cuerpo, tipo: 'administracion',
+        categoria: ['pago', 'mantenimiento', 'convivencia', 'general'].includes(b.categoria) ? b.categoria : 'general',
+        prioridad: b.prioridad === 'alta' ? 'alta' : 'normal',
+        leidoAdmin: true, leidoInquilino: false, creado,
+      }));
+      db.mensajes.unshift(...registros);
+      await guardarDb();
+      return json(res, 201, { ok: true, enviados: registros.length, mensajes: registros });
+    }
+    if (m === 'PUT' && recurso && partes[3] === 'leido') {
+      const msg = db.mensajes.find((x) => x.id === recurso);
+      if (!msg) return error(res, 404, 'Mensaje no encontrado');
+      if (msg.tipo === 'inquilino') {
+        msg.leidoAdmin = true;
+        msg.leidoAdminEn = ahora();
+        await guardarDb();
+      }
+      return ok(res, msg);
+    }
+    if (m === 'DELETE' && recurso) {
+      const i = db.mensajes.findIndex((x) => x.id === recurso);
+      if (i < 0) return error(res, 404, 'Mensaje no encontrado');
+      db.mensajes.splice(i, 1);
+      await guardarDb();
+      return ok(res);
+    }
+  }
+
   // CRUD genérico
   const col = coleccion[seccion];
   if (col) {
     const arr = col.arr();
-    if (m === 'GET') return ok(res, arr);
+    if (m === 'GET') return ok(res, seccion === 'contratos' ? arr.map(vistaContratoAdmin) : arr);
 
     if (m === 'POST' && !recurso) {
       const b = await leerJson(req);
       const nuevo = col.sanear(b);
+      const problemaContrato = seccion === 'contratos' ? validarContrato(nuevo) : '';
+      if (problemaContrato) return error(res, 400, problemaContrato);
       arr.push(nuevo);
       efectosSecundarios(seccion, nuevo);
       await guardarDb();
-      return json(res, 201, nuevo);
+      return json(res, 201, seccion === 'contratos' ? vistaContratoAdmin(nuevo) : nuevo);
     }
 
     if (m === 'PUT' && recurso) {
       const i = arr.findIndex((x) => x.id === recurso);
       if (i < 0) return error(res, 404, 'No existe');
       const b = await leerJson(req);
-      arr[i] = col.sanear({ ...arr[i], ...b }, arr[i]);
+      const actualizado = col.sanear({ ...arr[i], ...b }, arr[i]);
+      const problemaContrato = seccion === 'contratos' ? validarContrato(actualizado, arr[i].id) : '';
+      if (problemaContrato) return error(res, 400, problemaContrato);
+      arr[i] = actualizado;
       efectosSecundarios(seccion, arr[i]);
       await guardarDb();
-      return ok(res, arr[i]);
+      return ok(res, seccion === 'contratos' ? vistaContratoAdmin(arr[i]) : arr[i]);
     }
 
     if (m === 'DELETE' && recurso) {
@@ -911,16 +1179,19 @@ async function manejarApi(req, res, url) {
         const ctIds = db.contratos.filter((c) => aptIds.includes(c.apartamentoId)).map((c) => c.id);
         db.contratos = db.contratos.filter((c) => !aptIds.includes(c.apartamentoId));
         db.pagos = db.pagos.filter((p) => !ctIds.includes(p.contratoId));
+        db.mensajes = db.mensajes.filter((x) => !ctIds.includes(x.contratoId));
       }
       if (seccion === 'apartamentos') {
         const ctIds = db.contratos.filter((c) => c.apartamentoId === borrado.id).map((c) => c.id);
         db.contratos = db.contratos.filter((c) => c.apartamentoId !== borrado.id);
         db.pagos = db.pagos.filter((p) => !ctIds.includes(p.contratoId));
+        db.mensajes = db.mensajes.filter((x) => !ctIds.includes(x.contratoId));
       }
       if (seccion === 'contratos') {
         db.pagos = db.pagos.filter((p) => p.contratoId !== borrado.id);
-        const apt = db.apartamentos.find((a) => a.id === borrado.apartamentoId);
-        if (apt && apt.estado === 'arrendado') apt.estado = 'disponible';
+        db.mensajes = db.mensajes.filter((x) => x.contratoId !== borrado.id);
+        for (const [token, s] of sesionesInquilino) if (s.contratoId === borrado.id) sesionesInquilino.delete(token);
+        efectosSecundarios('contratos');
       }
       await guardarDb();
       return ok(res);
@@ -930,13 +1201,30 @@ async function manejarApi(req, res, url) {
   return error(res, 404, 'Endpoint no encontrado');
 }
 
-/** Mantiene coherente el estado del apartamento cuando cambia un contrato. */
-function efectosSecundarios(seccion, entidad) {
+/** Mantiene coherente el estado de todas las unidades cuando cambia un contrato. */
+function efectosSecundarios(seccion) {
   if (seccion !== 'contratos') return;
-  const apt = db.apartamentos.find((a) => a.id === entidad.apartamentoId);
-  if (!apt) return;
-  if (entidad.estado === 'activo') apt.estado = 'arrendado';
-  else if (apt.estado === 'arrendado') apt.estado = 'disponible';
+  const ocupadas = new Set(db.contratos
+    .filter((c) => c.estado === 'activo')
+    .map((c) => c.apartamentoId));
+  for (const apt of db.apartamentos) {
+    if (ocupadas.has(apt.id)) apt.estado = 'arrendado';
+    else if (apt.estado === 'arrendado') apt.estado = 'disponible';
+  }
+}
+
+function validarContrato(c, excluirId = '') {
+  if (!c.apartamentoId || !db.apartamentos.some((a) => a.id === c.apartamentoId)) {
+    return 'Selecciona una unidad válida.';
+  }
+  if (!c.inquilino?.nombre.trim()) return 'Escribe el nombre del inquilino.';
+  if (!c.inicio) return 'Indica la fecha de inicio del contrato.';
+  if (c.fin && c.fin < c.inicio) return 'La fecha de finalización no puede ser anterior al inicio.';
+  if (c.estado === 'activo' && db.contratos.some((x) =>
+    x.id !== excluirId && x.apartamentoId === c.apartamentoId && x.estado === 'activo')) {
+    return 'Esta unidad ya tiene un contrato activo.';
+  }
+  return '';
 }
 
 // ---------------------------------------------------------------------------

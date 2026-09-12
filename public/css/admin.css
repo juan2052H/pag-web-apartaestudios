@@ -256,3 +256,21 @@ ul.lista-simple { margin: 0; padding: 0; }
   color: var(--critico-ink); border: 1px solid color-mix(in srgb, var(--critico) 30%, transparent);
   font-variant-numeric: tabular-nums;
 }
+
+/* --- Mensajes ------------------------------------------------------------ */
+
+.lista-mensajes > li.mensaje { gap: 14px; align-items: flex-start; }
+.mensaje.sin-leer { background: color-mix(in srgb, var(--acento) 6%, var(--superficie)); }
+.mensaje-tipo {
+  width: 34px; height: 28px; flex: none; display: grid; place-items: center;
+  border-radius: 7px; background: var(--acento-suave); color: var(--acento-ink);
+  font-size: .66rem; font-weight: 760; letter-spacing: .05em;
+}
+.mensaje-cuerpo { margin: 8px 0 0; color: var(--ink-2); font-size: .88rem; white-space: pre-wrap; }
+.mensaje-acciones { gap: 6px; align-items: flex-end; flex: none; }
+.plantillas-mensaje { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .lista-mensajes > li.mensaje { flex-wrap: wrap; }
+  .mensaje-acciones { width: 100%; flex-direction: row; align-items: center; }
+}

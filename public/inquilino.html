@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portal del inquilino · Apartaestudios</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⌂</text></svg>">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/inquilino.css">
+</head>
+<body class="inquilino">
+
+<div class="acceso-inq" id="acceso-inq" hidden>
+  <div class="acceso-inq-caja">
+    <a class="volver" href="/">← Ver apartaestudios</a>
+    <div class="portal-marca">⌂</div>
+    <h1>Portal del inquilino</h1>
+    <p class="tenue">Consulta tu contrato, pagos y los mensajes de administración en un solo lugar.</p>
+    <form id="form-acceso-inq">
+      <div class="campo">
+        <label for="i-documento">Documento</label>
+        <input id="i-documento" name="documento" autocomplete="username" required>
+      </div>
+      <div class="campo">
+        <label for="i-clave">Clave de acceso</label>
+        <input id="i-clave" name="clave" type="password" autocomplete="current-password" required>
+      </div>
+      <div id="i-aviso"></div>
+      <button class="btn btn-primario btn-lg btn-bloque" type="submit">Entrar al portal</button>
+    </form>
+    <p class="mini tenue centro">¿No tienes clave? Solicítala a la administración del edificio.</p>
+  </div>
+</div>
+
+<div class="portal-inq" id="portal-inq" hidden>
+  <header class="cabecera-inq">
+    <a href="/" class="marca-inq"><span>⌂</span><b id="i-nombre-sitio">Mi apartaestudio</b></a>
+    <nav aria-label="Secciones del portal">
+      <a href="#mi-hogar">Mi hogar</a>
+      <a href="#mis-pagos">Pagos</a>
+      <a href="#mis-mensajes" class="enlace-mensajes">Mensajes <span id="i-globo" hidden>0</span></a>
+    </nav>
+    <div class="fila" style="gap:6px">
+      <button class="icono-btn" id="i-tema" type="button" aria-label="Cambiar tema">☾</button>
+      <button class="btn btn-sm" id="i-salir" type="button">Salir</button>
+    </div>
+  </header>
+
+  <main class="contenedor portal-contenido">
+    <section class="saludo-inq" aria-labelledby="i-saludo">
+      <div>
+        <span class="sobrelinea">TU PORTAL</span>
+        <h1 id="i-saludo">Hola</h1>
+        <p class="tenue" id="i-subtitulo"></p>
+      </div>
+      <a class="btn" href="#mis-mensajes">Escribir a administración</a>
+    </section>
+
+    <section id="mi-hogar" class="seccion-inq">
+      <div class="cabecera-seccion"><div><span class="sobrelinea">CONTRATO ACTIVO</span><h2>Mi hogar</h2></div></div>
+      <div class="rejilla-resumen" id="i-resumen"></div>
+    </section>
+
+    <section id="mis-pagos" class="seccion-inq">
+      <div class="cabecera-seccion"><div><span class="sobrelinea">ARRENDAMIENTO</span><h2>Mis pagos</h2></div></div>
+      <div id="i-pagos"></div>
+    </section>
+
+    <section id="mis-mensajes" class="seccion-inq">
+      <div class="cabecera-seccion"><div><span class="sobrelinea">COMUNICACIÓN PRIVADA</span><h2>Mensajes</h2></div></div>
+      <div class="dos-col-inq">
+        <div id="i-mensajes"></div>
+        <aside class="tarjeta formulario-mensaje">
+          <h3>Escribir a administración</h3>
+          <p class="mini tenue">Para pagos, mantenimiento, convivencia o cualquier inquietud sobre tu hogar.</p>
+          <form id="form-mensaje-inq">
+            <div class="campo"><label for="im-asunto">Asunto</label>
+              <input id="im-asunto" name="asunto" maxlength="160" placeholder="Ej. Solicitud de mantenimiento"></div>
+            <div class="campo"><label for="im-categoria">Categoría</label>
+              <select id="im-categoria" name="categoria"><option value="otro">Otro</option><option value="pago">Pago</option><option value="mantenimiento">Mantenimiento</option><option value="convivencia">Convivencia</option></select></div>
+            <label class="check"><input name="prioridad" type="checkbox"> Requiere atención pronta</label>
+            <div class="campo"><label for="im-cuerpo">Mensaje *</label>
+              <textarea id="im-cuerpo" name="cuerpo" maxlength="1500" required rows="6" placeholder="Cuéntanos cómo podemos ayudarte."></textarea></div>
+            <div id="im-aviso"></div>
+            <button class="btn btn-primario btn-bloque" type="submit">Enviar mensaje</button>
+          </form>
+        </aside>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="cargando" id="i-arranque"><div class="spinner"></div><span>Cargando portal…</span></div>
+
+<script src="/js/comun.js"></script>
+<script src="/js/inquilino.js"></script>
+</body>
+</html>
