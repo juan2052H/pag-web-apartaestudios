@@ -786,7 +786,10 @@ function vistaPublica() {
       lat: e.lat, lng: e.lng, descripcion: e.descripcion, amenidades: e.amenidades,
       fotoId: e.fotoId, encargado: e.encargado,
     })),
+    // El catálogo no debe revelar unidades que ya están arrendadas. La relación
+    // con el inquilino se conserva exclusivamente en el panel autenticado.
     apartamentos: db.apartamentos
+      .filter((a) => a.estado !== 'arrendado')
       .filter((a) => a.estado !== 'mantenimiento' || a.destacado)
       .map((a) => ({ ...a })),
   };

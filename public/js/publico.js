@@ -66,7 +66,7 @@
       precios.length ? { v: dinero(Math.min(...precios)), k: 'Desde' } : null,
       conVideo
         ? { v: numero(conVideo), k: 'Con video' }
-        : { v: numero(datos.apartamentos.length), k: 'Unidades en total' },
+        : { v: numero(datos.apartamentos.length), k: 'Unidades publicadas' },
     ].filter(Boolean);
 
     $('#hero-stats').innerHTML = stats

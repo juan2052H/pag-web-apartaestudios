@@ -19,6 +19,8 @@
   const edificio = (idv) => E.edificios.find((x) => x.id === idv);
   const apartamento = (idv) => E.apartamentos.find((x) => x.id === idv);
   const contrato = (idv) => E.contratos.find((x) => x.id === idv);
+  const contratoActivoDeApartamento = (apartamentoId) => E.contratos.find((x) =>
+    x.apartamentoId === apartamentoId && x.estado === 'activo');
   const medio = (idv) => E.media.find((x) => x.id === idv);
 
   const nombreUnidad = (a) => {
@@ -384,6 +386,8 @@
   }
 
   function tarjetaUnidad(a) {
+    const contratoActivo = contratoActivoDeApartamento(a.id);
+    const inquilino = contratoActivo?.inquilino?.nombre || '';
     const media = a.videoId
       ? `<video src="${urlMedia(a.videoId)}#t=0.6" preload="metadata" muted ${a.portadaId ? `poster="${urlMedia(a.portadaId)}"` : ''}></video>`
       : a.portadaId ? `<img src="${urlMedia(a.portadaId)}" alt="">`
@@ -397,6 +401,7 @@
           <span>N.º ${esc(a.numero)}</span>${a.area ? `<span>· ${esc(numero(a.area))} m²</span>` : ''}
           ${a.videoId ? '<span>· 🎬 con video</span>' : ''}
         </div>
+        ${a.estado === 'arrendado' ? `<div class="mini" style="margin-top:8px"><span class="tenue">Inquilino:</span> <strong>${esc(inquilino || 'Sin contrato activo registrado')}</strong></div>` : ''}
         <div style="font-weight:660;font-size:1.05rem;margin-top:auto">${esc(dinero(a.precio))}<span class="tenue mini"> /mes</span></div>
         <select class="control" data-estado="${esc(a.id)}" style="font-size:.82rem;padding:6px 9px">
           ${Object.entries(ESTADOS).map(([k, v]) => `<option value="${k}" ${a.estado === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}
