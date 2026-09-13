@@ -13,7 +13,7 @@
   let E = {
     config: {}, edificios: [], apartamentos: [], contratos: [],
     pagos: [], solicitudes: [], mensajes: [], media: [], analitica: null,
-    sesion: null, administradores: [],
+    sesion: null, administradores: [], auditoria: [],
   };
   let vistaActual = 'resumen';
 
@@ -151,14 +151,16 @@
     cartera:     { titulo: 'Cartera', sub: 'Saldos pendientes por inquilino' },
     mensajes:    { titulo: 'Mensajes', sub: 'Comunicación privada con inquilinos' },
     solicitudes: { titulo: 'Solicitudes', sub: 'Interesados que llegaron por el sitio' },
+    agenda:      { titulo: 'Agenda de visitas', sub: 'Horarios solicitados y seguimiento comercial' },
     medios:      { titulo: 'Multimedia', sub: 'Videos y fotos subidos' },
     administradores: { titulo: 'Administradores', sub: 'Accesos y edificios asignados' },
+    actividad:   { titulo: 'Actividad', sub: 'Bitácora reciente de acciones administrativas' },
     ajustes:     { titulo: 'Ajustes', sub: 'Datos del sitio y seguridad' },
   };
 
   function irA(v) {
     if (!VISTAS[v]) v = 'resumen';
-    if (v === 'administradores' && !esPrincipal()) v = 'resumen';
+    if ((v === 'administradores' || v === 'actividad') && !esPrincipal()) v = 'resumen';
     vistaActual = v;
     history.replaceState(null, '', '#' + v);
     $$('.nav-item[data-vista]').forEach((b) => b.classList.toggle('activo', b.dataset.vista === v));
@@ -178,8 +180,8 @@
     ({
       resumen: verResumen, unidades: verUnidades, edificios: verEdificios,
       contratos: verContratos, pagos: verPagos, cartera: verCartera,
-      mensajes: verMensajes, solicitudes: verSolicitudes, medios: verMedios,
-      administradores: verAdministradores, ajustes: verAjustes,
+      mensajes: verMensajes, solicitudes: verSolicitudes, agenda: verAgenda, medios: verMedios,
+      administradores: verAdministradores, actividad: verActividad, ajustes: verAjustes,
     })[v]();
   }
 
@@ -920,6 +922,7 @@
                 <button class="btn btn-sm btn-primario" type="button" data-pago="${esc(c.id)}">Pago</button>
                 <button class="btn btn-sm" type="button" data-hist="${esc(c.id)}">Historial</button>
                 <button class="btn btn-sm" type="button" data-mensaje="${esc(c.id)}">Mensaje</button>
+                <button class="btn btn-sm" type="button" data-imprimir-contrato="${esc(c.id)}">Imprimir</button>
                 <button class="btn btn-sm" type="button" data-portal="${esc(c.id)}">${c.portal?.activo ? 'Portal' : 'Activar portal'}</button>
                 <button class="btn btn-sm" type="button" data-editar="${esc(c.id)}">Editar</button>
                 <button class="btn btn-sm btn-peligro" type="button" data-borrar="${esc(c.id)}">✕</button>
@@ -934,6 +937,7 @@
     $$('#v-contratos [data-pago]').forEach((b) => b.addEventListener('click', () => formPago(null, b.dataset.pago)));
     $$('#v-contratos [data-hist]').forEach((b) => b.addEventListener('click', () => verHistorial(b.dataset.hist)));
     $$('#v-contratos [data-mensaje]').forEach((b) => b.addEventListener('click', () => formMensaje(b.dataset.mensaje)));
+    $$('#v-contratos [data-imprimir-contrato]').forEach((b) => b.addEventListener('click', () => imprimirContrato(b.dataset.imprimirContrato)));
     $$('#v-contratos [data-portal]').forEach((b) => b.addEventListener('click', () => formPortalInquilino(b.dataset.portal)));
     $$('#v-contratos [data-editar]').forEach((b) => b.addEventListener('click', () => formContrato(contrato(b.dataset.editar))));
     $$('#v-contratos [data-borrar]').forEach((b) => b.addEventListener('click', async () => {
@@ -942,6 +946,34 @@
         { titulo: 'Eliminar contrato', textoOk: 'Eliminar' }))) return;
       await operar(() => api('/api/contratos/' + c.id, { method: 'DELETE' }), 'Contrato eliminado');
     }));
+  }
+
+  function imprimirContrato(contratoId) {
+    const c = contrato(contratoId);
+    const a = c && apartamento(c.apartamentoId);
+    const e = a && edificio(a.edificioId);
+    if (!c || !a || !e) return nota('No se encontró la información completa del contrato.', 'error');
+    const contenido = `<main class="documento-contrato">
+      <span class="sobrelinea">RESUMEN IMPRIMIBLE DE ARRENDAMIENTO</span>
+      <h1>${esc(e.nombre || 'Apartaestudios')}</h1>
+      <p class="tenue">${esc([e.direccion, e.ciudad].filter(Boolean).join(' · '))}</p>
+      <div class="documento-datos">
+        <div><span>Inquilino</span><strong>${esc(c.inquilino?.nombre || '—')}</strong></div>
+        <div><span>Documento</span><strong>${esc(c.inquilino?.documento || '—')}</strong></div>
+        <div><span>Unidad</span><strong>${esc(a.numero || '—')} · ${esc(a.titulo || '')}</strong></div>
+        <div><span>Vigencia</span><strong>${esc(fechaTexto(c.inicio))}${c.fin ? ' a ' + esc(fechaTexto(c.fin)) : ' · Sin fecha final'}</strong></div>
+        <div><span>Canon mensual</span><strong>${esc(dinero(c.canon))}</strong></div>
+        <div><span>Día de pago</span><strong>${esc(numero(c.diaPago))} de cada mes</strong></div>
+        <div><span>Depósito</span><strong>${esc(c.deposito ? dinero(c.deposito) : 'No registrado')}</strong></div>
+        <div><span>Estado</span><strong>${esc(c.estado || '—')}</strong></div>
+      </div>
+      ${c.notas ? `<section><h2>Notas</h2><p>${esc(c.notas)}</p></section>` : ''}
+      <p class="nota-legal">Este resumen es informativo y no reemplaza el contrato firmado ni sus anexos.</p>
+    </main>`;
+    const ventana = window.open('', '_blank', 'noopener,noreferrer,width=760,height=780');
+    if (!ventana) return nota('El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes e inténtalo de nuevo.', 'error');
+    ventana.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Resumen de contrato</title><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#17241f;padding:42px;margin:0}.documento-contrato{max-width:700px;margin:auto;border:1px solid #ddd;border-radius:14px;padding:30px}.sobrelinea{font-size:11px;color:#93442e;font-weight:700;letter-spacing:.11em}.documento-contrato h1{margin:7px 0 3px}.tenue{color:#59635e}.documento-datos{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}.documento-datos div{border-bottom:1px solid #e6e4de;padding-bottom:9px}.documento-datos span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#59635e}.documento-datos strong{display:block;margin-top:4px}.documento-contrato h2{font-size:16px}.nota-legal{margin-top:30px;font-size:12px;color:#59635e}@media print{body{padding:0}.documento-contrato{border:0}}</style></head><body>${contenido}<script>window.onload=()=>window.print()<\/script></body></html>`);
+    ventana.document.close();
   }
 
   function formContrato(c = null) {
@@ -1180,6 +1212,7 @@
                 ${esInquilino ? 'De' : 'Para'} ${esc(c?.inquilino?.nombre || 'Contrato eliminado')} · ${esc(c ? nombreUnidad(apartamento(c.apartamentoId)) : '—')} · ${esc(fechaTexto(x.creado))}
               </div>
               <p class="mensaje-cuerpo">${esc(x.cuerpo)}</p>
+              ${(x.adjuntos || []).length ? `<div class="fila-wrap" style="gap:7px;margin-top:9px">${x.adjuntos.map((idMedio, i) => `<button class="btn btn-sm" type="button" data-adjunto-admin="${esc(idMedio)}">Ver evidencia ${i + 1}</button>`).join('')}</div>` : ''}
             </div>
             <div class="pila mensaje-acciones">
               ${esMantenimiento ? `<select class="control mini" data-gestion="${esc(x.id)}" style="width:auto;padding:5px 8px">
@@ -1206,10 +1239,29 @@
         method: 'PUT', body: { estadoGestion: s.value },
       }), 'Estado de mantenimiento actualizado');
     }));
+    $$('#v-mensajes [data-adjunto-admin]').forEach((b) => b.addEventListener('click', () => abrirAdjuntoPrivado(b.dataset.adjuntoAdmin)));
     $$('#v-mensajes [data-borrar-mensaje]').forEach((b) => b.addEventListener('click', async () => {
       if (!(await confirmar('¿Eliminar este mensaje del historial?', { titulo: 'Eliminar mensaje', textoOk: 'Eliminar' }))) return;
       await operar(() => api('/api/mensajes/' + b.dataset.borrarMensaje, { method: 'DELETE' }), 'Mensaje eliminado');
     }));
+  }
+
+  async function abrirAdjuntoPrivado(idMedio) {
+    try {
+      const r = await fetch('/api/media/' + encodeURIComponent(idMedio), {
+        headers: { Authorization: 'Bearer ' + App.token.get() },
+      });
+      if (!r.ok) throw new Error('No fue posible abrir la evidencia.');
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const m = modal({
+        titulo: 'Evidencia de mantenimiento', tamano: 'lg',
+        cuerpo: `<img src="${url}" alt="Evidencia adjunta por el inquilino" style="display:block;max-width:100%;max-height:68vh;margin:auto;border-radius:10px">`,
+        pie: '<button class="btn" type="button" data-cerrar>Cerrar</button>',
+        alCerrar: () => URL.revokeObjectURL(url),
+      });
+      m.caja.querySelector('[data-cerrar]').addEventListener('click', m.cerrar);
+    } catch (e) { nota(e.message, 'error'); }
   }
 
   function formMensaje(contratoPrevio = '') {
@@ -1526,6 +1578,31 @@
     }));
   }
 
+  /* ========================================================= Agenda visitas */
+
+  function verAgenda() {
+    const pendientes = E.solicitudes
+      .filter((x) => x.fechaVisita && x.horaVisita && !['cerrada', 'descartada'].includes(x.estado))
+      .sort((a, b) => `${a.fechaVisita} ${a.horaVisita}`.localeCompare(`${b.fechaVisita} ${b.horaVisita}`));
+    const sinHorario = E.solicitudes.filter((x) => !x.fechaVisita || !x.horaVisita)
+      .filter((x) => !['cerrada', 'descartada'].includes(x.estado));
+
+    $('#v-agenda').innerHTML = `
+      <div class="aviso" style="margin-bottom:18px">Cada franja se reserva al recibir la solicitud para evitar cruces. Confirma con la persona interesada antes de marcar la visita como realizada.</div>
+      ${pendientes.length ? `<div class="pila" style="gap:12px">${pendientes.map((x) => `
+        <article class="bloque-panel"><div class="cuerpo fila-wrap" style="align-items:center;gap:16px">
+          <div class="crece"><div class="sobrelinea">${esc(fechaTexto(x.fechaVisita))} · ${esc(x.horaVisita)}</div>
+            <h3 style="margin:3px 0">${esc(x.nombre)}</h3>
+            <div class="mini tenue">${esc(x.apartamentoId ? nombreUnidad(apartamento(x.apartamentoId)) : 'Interés sin unidad específica')}</div>
+            <div class="mini tenue" style="margin-top:6px">${esc([x.telefono, x.email].filter(Boolean).join(' · '))}</div></div>
+          <div class="pila" style="gap:7px;align-items:flex-end"><span class="chip ${x.estado === 'visita' ? 'chip-reservado' : 'chip-mantenimiento'}">${esc(x.estado)}</span>
+            <button class="btn btn-sm btn-primario" type="button" data-ir-solicitud="${esc(x.id)}">Gestionar solicitud</button></div>
+        </div></article>`).join('')}</div>`
+        : '<div class="vacio"><h3>No hay visitas agendadas</h3><p>Las solicitudes con fecha y franja horaria aparecerán aquí.</p></div>'}
+      ${sinHorario.length ? `<p class="mini tenue" style="margin-top:18px">También tienes ${sinHorario.length} solicitud${sinHorario.length === 1 ? '' : 'es'} pendiente${sinHorario.length === 1 ? '' : 's'} sin horario definido.</p>` : ''}`;
+    $$('#v-agenda [data-ir-solicitud]').forEach((b) => b.addEventListener('click', () => irA('solicitudes')));
+  }
+
   /* ============================================================== Multimedia */
 
   function verMedios() {
@@ -1679,6 +1756,24 @@
         m.cerrar();
       } catch { ev.target.disabled = false; }
     });
+  }
+
+  /* ================================================================= Actividad */
+
+  function verActividad() {
+    if (!esPrincipal()) return irA('resumen');
+    const eventos = E.auditoria || [];
+    $('#v-actividad').innerHTML = eventos.length ? `
+      <div class="bloque-panel"><header><div class="crece"><h3>Bitácora de operaciones</h3>
+        <p class="mini tenue" style="margin:2px 0 0">Se conservan hasta 500 acciones. No se registran contraseñas ni el contenido de mensajes.</p></div></header>
+        <ul class="lista-simple">${eventos.map((x) => {
+          const edificioNombre = x.edificioId ? edificio(x.edificioId)?.nombre : '';
+          return `<li><div class="crece"><strong>${esc(x.accion)}</strong>
+            ${x.detalle ? `<div class="mini tenue" style="margin-top:4px">${esc(x.detalle)}</div>` : ''}
+            <div class="mini tenue" style="margin-top:5px">${esc(x.actor || 'Sistema')} · ${esc(fechaTexto(x.creado))}${edificioNombre ? ' · ' + esc(edificioNombre) : ''}</div>
+          </div><span class="chip ${x.rol === 'principal' ? 'chip-arrendado' : x.rol === 'edificio' ? 'chip-reservado' : 'chip-mantenimiento'}">${esc(x.rol === 'principal' ? 'Propietario' : x.rol === 'edificio' ? 'Administrador' : 'Sistema')}</span></li>`;
+        }).join('')}</ul></div>`
+      : '<div class="vacio"><h3>Aún no hay actividad registrada</h3><p>Las acciones administrativas y solicitudes nuevas aparecerán aquí.</p></div>';
   }
 
   /* ================================================================= Ajustes */

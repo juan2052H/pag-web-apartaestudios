@@ -82,6 +82,9 @@
             <label class="check"><input name="prioridad" type="checkbox"> Requiere atención pronta</label>
             <div class="campo"><label for="im-cuerpo">Mensaje *</label>
               <textarea id="im-cuerpo" name="cuerpo" maxlength="1500" required rows="6" placeholder="Cuéntanos cómo podemos ayudarte."></textarea></div>
+            <div class="campo"><label for="im-adjuntos">Fotos de la novedad <span class="tenue mini">(solo mantenimiento)</span></label>
+              <input id="im-adjuntos" name="adjuntos" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
+              <span class="ayuda">Hasta 5 imágenes, máximo 10 MB cada una. Solo administración y tú pueden verlas.</span></div>
             <div id="im-aviso"></div>
             <button class="btn btn-primario btn-bloque" type="submit">Enviar mensaje</button>
           </form>

@@ -25,7 +25,10 @@ const DIR_DATOS = path.join(RAIZ, 'datos');
 const DIR_SUBIDAS = path.join(DIR_DATOS, 'subidas');
 const ARCHIVO_DB = path.join(DIR_DATOS, 'db.json');
 const LIMITE_SUBIDA = 600 * 1024 * 1024; // 600 MB por archivo
+const LIMITE_ADJUNTO_INQUILINO = 10 * 1024 * 1024; // 10 MB por evidencia
 const DURACION_SESION = 8 * 60 * 60 * 1000; // 8 horas
+const MAX_INTENTOS_LOGIN = 5;
+const BLOQUEO_LOGIN_MS = 15 * 60 * 1000;
 
 const MIMES = {
   '.html': 'text/html; charset=utf-8',
@@ -284,6 +287,7 @@ function dbPorDefecto() {
     solicitudes: [],
     mensajes: [],
     media: [],
+    auditoria: [],
   };
 }
 
@@ -297,12 +301,12 @@ async function cargarDb() {
     await guardarDb();
     console.log('  · Base de datos creada con datos de ejemplo.');
   }
+  let cambio = false;
   // Normaliza colecciones faltantes
-  for (const k of ['edificios', 'apartamentos', 'contratos', 'pagos', 'solicitudes', 'mensajes', 'media', 'administradores']) {
-    if (!Array.isArray(db[k])) db[k] = [];
+  for (const k of ['edificios', 'apartamentos', 'contratos', 'pagos', 'solicitudes', 'mensajes', 'media', 'administradores', 'auditoria']) {
+    if (!Array.isArray(db[k])) { db[k] = []; cambio = true; }
   }
   db.config = Object.assign({}, dbPorDefecto().config, db.config || {});
-  let cambio = false;
 
   // Migración de la cuenta única de versiones anteriores al propietario.
   if (!db.administradores.length) {
@@ -365,6 +369,31 @@ async function guardarDb() {
 
 const sesiones = new Map(); // token -> { administradorId, expira }
 const sesionesInquilino = new Map(); // token -> { contratoId, expira }
+const intentosLogin = new Map(); // usuario + IP -> { cantidad, bloqueadoHasta, ultimo }
+
+function claveIntentosLogin(req, usuario) {
+  // No se confia en X-Forwarded-For: un cliente puede falsificarlo si el proxy
+  // no lo elimina. El usuario tambien evita que un ataque distribuido se concentre
+  // sobre una sola cuenta.
+  return `${texto(usuario, 40).toLowerCase()}|${texto(req.socket?.remoteAddress, 80)}`;
+}
+
+function bloqueoActivoLogin(clave) {
+  const intento = intentosLogin.get(clave);
+  if (!intento || !intento.bloqueadoHasta) return false;
+  if (intento.bloqueadoHasta <= Date.now()) { intentosLogin.delete(clave); return false; }
+  return true;
+}
+
+function registrarFalloLogin(clave) {
+  const previo = intentosLogin.get(clave) || { cantidad: 0 };
+  const cantidad = previo.cantidad + 1;
+  intentosLogin.set(clave, {
+    cantidad,
+    bloqueadoHasta: cantidad >= MAX_INTENTOS_LOGIN ? Date.now() + BLOQUEO_LOGIN_MS : 0,
+    ultimo: Date.now(),
+  });
+}
 
 function perfilAdministrador(admin) {
   return {
@@ -423,6 +452,7 @@ setInterval(() => {
   const t = Date.now();
   for (const [k, v] of sesiones) if (v.expira < t) sesiones.delete(k);
   for (const [k, v] of sesionesInquilino) if (v.expira < t) sesionesInquilino.delete(k);
+  for (const [k, v] of intentosLogin) if (v.ultimo < t - BLOQUEO_LOGIN_MS) intentosLogin.delete(k);
 }, 15 * 60 * 1000).unref();
 
 // ---------------------------------------------------------------------------
@@ -519,7 +549,7 @@ function servirRobots(req, res) {
 
 function servirSitemap(req, res) {
   const origen = origenPublico(req);
-  const cuerpo = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${origen}/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n</urlset>\n`;
+  const cuerpo = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${origen}/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n  <url><loc>${origen}/privacidad</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n</urlset>\n`;
   return responderTexto(req, res, 'application/xml', cuerpo);
 }
 
@@ -538,7 +568,7 @@ async function servirMedia(req, res, mediaId) {
   const cabeceras = {
     'Content-Type': m.mime || 'application/octet-stream',
     'Accept-Ranges': 'bytes',
-    'Cache-Control': 'public, max-age=31536000, immutable',
+    'Cache-Control': m.privado ? 'private, no-store' : 'public, max-age=31536000, immutable',
   };
 
   if (rango) {
@@ -565,17 +595,17 @@ async function servirMedia(req, res, mediaId) {
 }
 
 /** Recibe el cuerpo crudo del request y lo guarda como archivo. */
-function recibirArchivo(req, res, destino) {
+function recibirArchivo(req, res, destino, limite = LIMITE_SUBIDA, mensajeLimite = 'El archivo supera el límite permitido') {
   return new Promise((resolve, reject) => {
     let total = 0;
     const out = fs.createWriteStream(destino);
     req.on('data', (c) => {
       total += c.length;
-      if (total > LIMITE_SUBIDA) {
+      if (total > limite) {
         req.destroy();
         out.destroy();
         fs.unlink(destino, () => {});
-        reject(new Error('El archivo supera el límite de 600 MB'));
+        reject(new Error(mensajeLimite));
       }
     });
     req.pipe(out);
@@ -868,6 +898,22 @@ function mensajePermitido(sesion, mensaje) {
   return contratoPermitido(sesion, contrato);
 }
 
+/** Bitácora acotada para el propietario: no guarda contraseñas ni textos sensibles. */
+function registrarAuditoria(sesion, accion, detalle = '', edificioId = '') {
+  if (!db?.auditoria) return;
+  db.auditoria.unshift({
+    id: id(),
+    administradorId: sesion?.id || '',
+    actor: sesion?.nombre || (sesion ? 'Administrador' : 'Sitio público'),
+    rol: sesion?.rol || 'sistema',
+    accion: texto(accion, 160),
+    detalle: texto(detalle, 400),
+    edificioId: texto(edificioId, 40),
+    creado: ahora(),
+  });
+  if (db.auditoria.length > 500) db.auditoria.length = 500;
+}
+
 function registroPermitido(sesion, seccion, registro) {
   if (seccion === 'edificios') return !!registro && puedeGestionarEdificio(sesion, registro.id);
   if (seccion === 'apartamentos') return apartamentoPermitido(sesion, registro);
@@ -890,6 +936,10 @@ function edificiosQueUsanMedio(mediaId) {
 function medioPermitido(sesion, medio) {
   if (!medio) return false;
   if (esPrincipal(sesion)) return true;
+  if (medio.contratoId) {
+    const contrato = db.contratos.find((c) => c.id === medio.contratoId);
+    return contratoPermitido(sesion, contrato);
+  }
   const usos = edificiosQueUsanMedio(medio.id);
   if ([...usos].some((idEdificio) => puedeGestionarEdificio(sesion, idEdificio))) return true;
   return usos.size === 0 && medio.creadoPorAdministradorId === sesion.id;
@@ -931,9 +981,12 @@ function vistaAdmin(sesion) {
     pagos: db.pagos.filter((p) => idsContratos.has(p.contratoId)),
     solicitudes: db.solicitudes.filter((s) => idsApartamentos.has(s.apartamentoId)),
     mensajes: db.mensajes.filter((m) => idsContratos.has(m.contratoId)),
-    media: db.media.filter((m) => medioPermitido(sesion, m)).map((m) => ({ ...m, url: `/api/media/${m.id}` })),
+    // Los adjuntos de mantenimiento se solicitan individualmente con sesión;
+    // no se mezclan con la biblioteca pública de fotos y videos.
+    media: db.media.filter((m) => !m.privado && medioPermitido(sesion, m)).map((m) => ({ ...m, url: `/api/media/${m.id}` })),
     analitica: calcularAnalitica(12, esPrincipal(sesion) ? null : sesion.edificioIds),
     administradores: esPrincipal(sesion) ? db.administradores.map(vistaAdministrador) : [],
+    auditoria: esPrincipal(sesion) ? db.auditoria.slice(0, 200) : [],
   };
 }
 
@@ -1000,6 +1053,9 @@ function vistaPortalInquilino(c) {
       prioridad: x.prioridad, categoria: x.categoria, creado: x.creado,
       leidoInquilino: !!x.leidoInquilino,
       estadoGestion: x.estadoGestion || '', actualizadoGestion: x.actualizadoGestion || '',
+      adjuntos: (x.adjuntos || []).map((idMedio) => db.media.find((m) =>
+        m.id === idMedio && m.privado && m.contratoId === c.id)).filter(Boolean)
+        .map((m) => ({ id: m.id, nombre: m.nombre, mime: m.mime, tamano: m.tamano })),
     }));
 
   return {
@@ -1045,6 +1101,14 @@ async function manejarApi(req, res, url) {
   if (seccion === 'publico' && m === 'GET') return ok(res, vistaPublica());
 
   if (seccion === 'media' && (m === 'GET' || m === 'HEAD') && recurso) {
+    const medio = db.media.find((x) => x.id === recurso);
+    if (!medio) return error(res, 404, 'Archivo no encontrado');
+    if (!medio.privado) return servirMedia(req, res, recurso);
+    const admin = sesionDe(req);
+    const inquilino = sesionInquilinoDe(req);
+    const puedeVer = (admin && medioPermitido(admin, medio)) ||
+      (inquilino && medio.contratoId === inquilino.contratoId);
+    if (!puedeVer) return error(res, 401, 'No autorizado para ver este adjunto.');
     return servirMedia(req, res, recurso);
   }
 
@@ -1053,13 +1117,24 @@ async function manejarApi(req, res, url) {
     if (!texto(b.nombre) || !(texto(b.telefono) || texto(b.email))) {
       return error(res, 400, 'Necesitamos tu nombre y un teléfono o correo.');
     }
+    if (b.consentimiento !== true && b.consentimiento !== 'on') {
+      return error(res, 400, 'Debes aceptar el tratamiento de datos para enviar la solicitud.');
+    }
     const fechaVisita = texto(b.fechaVisita, 10);
     const horaVisita = texto(b.horaVisita, 5);
+    if ((fechaVisita && !horaVisita) || (!fechaVisita && horaVisita)) {
+      return error(res, 400, 'Completa fecha y franja horaria, o deja ambas sin preferencia.');
+    }
     if (fechaVisita && (diasHasta(fechaVisita) === null || diasHasta(fechaVisita) < 0)) {
       return error(res, 400, 'La fecha de visita debe ser hoy o una fecha futura.');
     }
     if (horaVisita && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(horaVisita)) {
       return error(res, 400, 'La franja horaria no es válida.');
+    }
+    if (fechaVisita && horaVisita && db.solicitudes.some((x) =>
+      x.fechaVisita === fechaVisita && x.horaVisita === horaVisita &&
+      ['nueva', 'contactada', 'visita'].includes(x.estado))) {
+      return error(res, 409, 'Esa franja acaba de ser solicitada. Elige otra hora para la visita.');
     }
     const s = {
       id: id(),
@@ -1070,10 +1145,13 @@ async function manejarApi(req, res, url) {
       mensaje: texto(b.mensaje, 1500),
       fechaVisita,
       horaVisita,
+      consentimiento: true,
+      consentimientoEn: ahora(),
       estado: 'nueva',
       creado: ahora(),
     };
     db.solicitudes.unshift(s);
+    registrarAuditoria(null, 'Nueva solicitud de visita', fechaVisita ? `Agenda solicitada para ${fechaVisita} ${horaVisita}` : 'Solicitud sin horario preferido');
     await guardarDb();
     return json(res, 201, { ok: true, id: s.id });
   }
@@ -1083,13 +1161,21 @@ async function manejarApi(req, res, url) {
     if (recurso === 'login' && m === 'POST') {
       const b = await leerJson(req);
       const documento = documentoNormalizado(b.documento);
+      const claveIntento = claveIntentosLogin(req, `inquilino:${documento}`);
+      if (bloqueoActivoLogin(claveIntento)) {
+        return error(res, 429, 'Demasiados intentos. Espera 15 minutos antes de volver a intentarlo.');
+      }
       const c = db.contratos.find((x) =>
         x.estado === 'activo' && contratoActivoEn(x, mesActual()) &&
         x.portal?.activo && documento &&
         documentoNormalizado(x.inquilino?.documento) === documento &&
         verificarClave(b.clave || '', x.portal?.sal, x.portal?.hash));
       await new Promise((r) => setTimeout(r, 250));
-      if (!c) return error(res, 401, 'Documento o clave incorrectos.');
+      if (!c) {
+        registrarFalloLogin(claveIntento);
+        return error(res, 401, 'Documento o clave incorrectos.');
+      }
+      intentosLogin.delete(claveIntento);
       return ok(res, {
         token: crearSesionInquilino(c.id),
         nombre: c.inquilino?.nombre || 'Inquilino',
@@ -1114,12 +1200,48 @@ async function manejarApi(req, res, url) {
 
     if (recurso === 'panel' && m === 'GET') return ok(res, vistaPortalInquilino(c));
 
+    // Evidencias privadas para solicitudes de mantenimiento. El archivo no se
+    // publica y solo puede recuperarse con sesión del contrato o de su edificio.
+    if (recurso === 'adjuntos' && m === 'POST') {
+      const mime = texto(req.headers['content-type'], 100).toLowerCase();
+      if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(mime)) {
+        return error(res, 415, 'Adjunta solo imágenes PNG, JPG, WEBP o GIF.');
+      }
+      let nombre = 'evidencia';
+      try { nombre = Buffer.from(texto(req.headers['x-nombre'], 600), 'base64').toString('utf8') || 'evidencia'; } catch {}
+      const mid = id();
+      const archivo = mid + (EXT_POR_MIME[mime] || '.img');
+      try {
+        const tam = await recibirArchivo(req, res, path.join(DIR_SUBIDAS, archivo), LIMITE_ADJUNTO_INQUILINO,
+          'La imagen supera el límite de 10 MB.');
+        const reg = {
+          id: mid, archivo, nombre: texto(nombre, 200), mime, tipo: 'imagen', tamano: tam,
+          privado: true, contratoId: c.id, creadoPorInquilino: true, creado: ahora(),
+        };
+        db.media.unshift(reg);
+        await guardarDb();
+        return json(res, 201, { ok: true, id: reg.id, nombre: reg.nombre, tamano: reg.tamano });
+      } catch (e) {
+        await fsp.unlink(path.join(DIR_SUBIDAS, archivo)).catch(() => {});
+        return error(res, 413, e.message || 'No se pudo guardar la imagen.');
+      }
+    }
+
     if (recurso === 'mensajes' && m === 'POST') {
       const b = await leerJson(req);
       const cuerpo = texto(b.cuerpo, 1500).trim();
       if (!cuerpo) return error(res, 400, 'Escribe el mensaje que quieres enviar.');
       const categorias = ['pago', 'mantenimiento', 'convivencia', 'otro'];
       const categoria = categorias.includes(b.categoria) ? b.categoria : 'otro';
+      const adjuntos = [...new Set(Array.isArray(b.adjuntos) ? b.adjuntos.map((x) => texto(x, 40)).filter(Boolean) : [])];
+      if (adjuntos.length > 5) return error(res, 400, 'Puedes adjuntar hasta 5 imágenes.');
+      if (adjuntos.length && categoria !== 'mantenimiento') {
+        return error(res, 400, 'Las imágenes solo se adjuntan a solicitudes de mantenimiento.');
+      }
+      if (adjuntos.some((idMedio) => !db.media.some((x) =>
+        x.id === idMedio && x.privado && x.contratoId === c.id && x.creadoPorInquilino))) {
+        return error(res, 400, 'Uno de los adjuntos no es válido para este contrato.');
+      }
       const reg = {
         id: id(), contratoId: c.id,
         asunto: texto(b.asunto, 160).trim() || 'Mensaje del inquilino',
@@ -1129,9 +1251,11 @@ async function manejarApi(req, res, url) {
         prioridad: b.prioridad === 'alta' ? 'alta' : 'normal',
         estadoGestion: categoria === 'mantenimiento' ? 'abierta' : '',
         actualizadoGestion: categoria === 'mantenimiento' ? ahora() : '',
+        adjuntos,
         leidoAdmin: false, leidoInquilino: true, creado: ahora(),
       };
       db.mensajes.unshift(reg);
+      registrarAuditoria(null, 'Nueva solicitud del inquilino', categoria === 'mantenimiento' ? 'Mantenimiento recibido' : 'Mensaje recibido');
       await guardarDb();
       return json(res, 201, { ok: true, mensaje: reg });
     }
@@ -1155,10 +1279,18 @@ async function manejarApi(req, res, url) {
     if (recurso === 'login' && m === 'POST') {
       const b = await leerJson(req);
       const usuario = texto(b.usuario, 40).trim().toLowerCase();
+      const claveIntento = claveIntentosLogin(req, `admin:${usuario}`);
+      if (bloqueoActivoLogin(claveIntento)) {
+        return error(res, 429, 'Demasiados intentos. Espera 15 minutos antes de volver a intentarlo.');
+      }
       const admin = db.administradores.find((x) => x.activo && String(x.usuario).toLowerCase() === usuario);
       const claveOk = admin && verificarClave(b.clave || '', admin.sal, admin.hash);
       await new Promise((r) => setTimeout(r, 250)); // freno básico contra fuerza bruta
-      if (!admin || !claveOk) return error(res, 401, 'Usuario o contraseña incorrectos.');
+      if (!admin || !claveOk) {
+        registrarFalloLogin(claveIntento);
+        return error(res, 401, 'Usuario o contraseña incorrectos.');
+      }
+      intentosLogin.delete(claveIntento);
       return ok(res, {
         token: crearSesion(admin),
         ...perfilAdministrador(admin),
@@ -1194,6 +1326,7 @@ async function manejarApi(req, res, url) {
       admin.claveInicial = false;
       admin.usuario = usuario;
       admin.actualizado = ahora();
+      registrarAuditoria(s, 'Credenciales actualizadas', 'El administrador actualizó sus propias credenciales.');
       await guardarDb();
       return ok(res);
     }
@@ -1232,6 +1365,7 @@ async function manejarApi(req, res, url) {
         ...credencial, activo: true, claveInicial: false, creado: ahora(), actualizado: ahora(),
       };
       db.administradores.push(nuevo);
+      registrarAuditoria(sesion, 'Administrador creado', `${nuevo.nombre} recibió acceso a ${nuevo.edificioIds.length} edificio(s).`);
       await guardarDb();
       return json(res, 201, vistaAdministrador(nuevo));
     }
@@ -1265,11 +1399,13 @@ async function manejarApi(req, res, url) {
         admin.hash = credencial.hash;
       }
       admin.actualizado = ahora();
+      registrarAuditoria(sesion, 'Administrador actualizado', `${admin.nombre}: ${admin.activo ? 'acceso activo' : 'acceso pausado'}.`);
       await guardarDb();
       return ok(res, vistaAdministrador(admin));
     }
 
     if (m === 'DELETE') {
+      registrarAuditoria(sesion, 'Administrador eliminado', `Se eliminó la cuenta de ${admin.nombre}.`);
       db.administradores = db.administradores.filter((x) => x.id !== admin.id);
       for (const [token, datosSesion] of sesiones) {
         if (datosSesion.administradorId === admin.id) sesiones.delete(token);
@@ -1297,6 +1433,7 @@ async function manejarApi(req, res, url) {
         creadoPorAdministradorId: sesion.id, creado: ahora(),
       };
       db.media.unshift(reg);
+      registrarAuditoria(sesion, 'Archivo multimedia subido', `${reg.tipo}: ${reg.nombre}`);
       await guardarDb();
       return json(res, 201, { ok: true, ...reg, url: `/api/media/${mid}` });
     } catch (e) {
@@ -1305,7 +1442,7 @@ async function manejarApi(req, res, url) {
   }
 
   if (seccion === 'media' && m === 'GET' && !recurso) {
-    return ok(res, db.media.filter((x) => medioPermitido(sesion, x)).map((x) => ({ ...x, url: `/api/media/${x.id}` })));
+    return ok(res, db.media.filter((x) => !x.privado && medioPermitido(sesion, x)).map((x) => ({ ...x, url: `/api/media/${x.id}` })));
   }
 
   if (seccion === 'media' && m === 'DELETE' && recurso) {
@@ -1322,7 +1459,9 @@ async function manejarApi(req, res, url) {
       if (e.fotoId === reg.id) e.fotoId = null;
       if (e.encargado && e.encargado.fotoId === reg.id) e.encargado.fotoId = null;
     }
+    for (const msg of db.mensajes) msg.adjuntos = (msg.adjuntos || []).filter((idMedio) => idMedio !== reg.id);
     await fsp.unlink(path.join(DIR_SUBIDAS, reg.archivo)).catch(() => {});
+    registrarAuditoria(sesion, 'Archivo multimedia eliminado', reg.nombre);
     await guardarDb();
     return ok(res);
   }
@@ -1348,6 +1487,7 @@ async function manejarApi(req, res, url) {
       if (b[k] !== undefined) db.config[k] = texto(b[k], 200);
     }
     if (b.whatsapp !== undefined) db.config.whatsapp = texto(b.whatsapp, 40).replace(/\D/g, '');
+    registrarAuditoria(sesion, 'Configuración pública actualizada');
     await guardarDb();
     return ok(res, { config: vistaConfigAdmin() });
   }
@@ -1362,6 +1502,7 @@ async function manejarApi(req, res, url) {
       if (!solicitudPermitida(sesion, s)) return prohibido();
       if (['nueva', 'contactada', 'visita', 'cerrada', 'descartada'].includes(b.estado)) s.estado = b.estado;
       if (b.notas !== undefined) s.notas = texto(b.notas, 1000);
+      registrarAuditoria(sesion, 'Solicitud de visita actualizada', `Estado: ${s.estado}.`);
       await guardarDb();
       return ok(res, s);
     }
@@ -1369,6 +1510,7 @@ async function manejarApi(req, res, url) {
       const i = db.solicitudes.findIndex((x) => x.id === recurso);
       if (i < 0) return error(res, 404, 'No existe');
       if (!solicitudPermitida(sesion, db.solicitudes[i])) return prohibido();
+      registrarAuditoria(sesion, 'Solicitud de visita eliminada');
       db.solicitudes.splice(i, 1);
       await guardarDb();
       return ok(res);
@@ -1383,6 +1525,7 @@ async function manejarApi(req, res, url) {
     const b = await leerJson(req);
     if (b.activo === false) {
       c.portal = { activo: false, sal: '', hash: '', actualizado: ahora() };
+      registrarAuditoria(sesion, 'Portal del inquilino desactivado', `Contrato ${c.id.slice(0, 6)}.`);
       await guardarDb();
       return ok(res, { activo: false });
     }
@@ -1391,6 +1534,7 @@ async function manejarApi(req, res, url) {
     }
     const credencial = hashClave(b.clave);
     c.portal = { activo: true, sal: credencial.sal, hash: credencial.hash, actualizado: ahora() };
+    registrarAuditoria(sesion, 'Portal del inquilino activado o restablecido', `Contrato ${c.id.slice(0, 6)}.`);
     await guardarDb();
     return ok(res, { activo: true, actualizado: c.portal.actualizado });
   }
@@ -1429,6 +1573,7 @@ async function manejarApi(req, res, url) {
         leidoAdmin: true, leidoInquilino: false, creado,
       }));
       db.mensajes.unshift(...registros);
+      registrarAuditoria(sesion, 'Mensaje enviado a inquilino(s)', `${registros.length} entrega(s) privada(s).`, edificioId);
       await guardarDb();
       return json(res, 201, { ok: true, enviados: registros.length, mensajes: registros });
     }
@@ -1439,6 +1584,7 @@ async function manejarApi(req, res, url) {
       if (msg.tipo === 'inquilino') {
         msg.leidoAdmin = true;
         msg.leidoAdminEn = ahora();
+        registrarAuditoria(sesion, 'Mensaje de inquilino leído');
         await guardarDb();
       }
       return ok(res, msg);
@@ -1456,6 +1602,7 @@ async function manejarApi(req, res, url) {
       }
       msg.estadoGestion = b.estadoGestion;
       msg.actualizadoGestion = ahora();
+      registrarAuditoria(sesion, 'Mantenimiento actualizado', `Estado: ${msg.estadoGestion}.`);
       await guardarDb();
       return ok(res, msg);
     }
@@ -1463,6 +1610,7 @@ async function manejarApi(req, res, url) {
       const i = db.mensajes.findIndex((x) => x.id === recurso);
       if (i < 0) return error(res, 404, 'Mensaje no encontrado');
       if (!mensajePermitido(sesion, db.mensajes[i])) return prohibido();
+      registrarAuditoria(sesion, 'Mensaje eliminado');
       db.mensajes.splice(i, 1);
       await guardarDb();
       return ok(res);
@@ -1488,6 +1636,7 @@ async function manejarApi(req, res, url) {
       if (problemaContrato) return error(res, 400, problemaContrato);
       arr.push(nuevo);
       efectosSecundarios(seccion, nuevo);
+      registrarAuditoria(sesion, 'Registro creado', seccion);
       await guardarDb();
       return json(res, 201, seccion === 'contratos' ? vistaContratoAdmin(nuevo) : nuevo);
     }
@@ -1504,6 +1653,7 @@ async function manejarApi(req, res, url) {
       if (problemaContrato) return error(res, 400, problemaContrato);
       arr[i] = actualizado;
       efectosSecundarios(seccion, arr[i]);
+      registrarAuditoria(sesion, 'Registro actualizado', seccion);
       await guardarDb();
       return ok(res, seccion === 'contratos' ? vistaContratoAdmin(arr[i]) : arr[i]);
     }
@@ -1514,6 +1664,7 @@ async function manejarApi(req, res, url) {
       if (!registroPermitido(sesion, seccion, arr[i])) return prohibido();
       if (seccion === 'edificios' && !esPrincipal(sesion)) return prohibido();
       const [borrado] = arr.splice(i, 1);
+      registrarAuditoria(sesion, 'Registro eliminado', seccion);
       // Limpieza en cascada
       if (seccion === 'edificios') {
         const aptIds = db.apartamentos.filter((a) => a.edificioId === borrado.id).map((a) => a.id);

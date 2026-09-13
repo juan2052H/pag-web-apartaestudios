@@ -48,9 +48,13 @@ contratos y su historial de pagos, para que puedas ver todo funcionando de una v
   desglose de canon + administración + depósito, características, zonas comunes,
   mini mapa con enlace a "cómo llegar" y la tarjeta del **encargado del edificio**
   con teléfono, correo, horario y botón directo de WhatsApp.
-- **Formulario de solicitud**: lo que se envía aparece en el panel como una
-  solicitud nueva, con contador en el menú lateral. El interesado puede indicar
-  fecha y franja horaria preferidas para una visita.
+- **Formulario de solicitud**: pide consentimiento para el tratamiento de datos
+  y lo que se envía aparece en el panel como una solicitud nueva. El interesado
+  puede indicar fecha y franja horaria; una franja activa no se duplica por otra
+  solicitud.
+- **Política de privacidad** en `/privacidad`, enlazada desde el formulario y el
+  pie de página. Antes de producción, completa sus datos de responsable y marco
+  legal con asesoría local.
 - **Tema claro y oscuro**, y enlaces profundos: `/#apto-<id>` abre esa ficha.
 
 ## Qué hace el panel administrativo
@@ -60,13 +64,15 @@ contratos y su historial de pagos, para que puedas ver todo funcionando de una v
 | **Resumen** | Ocupación, ingreso mensual, recaudo del mes, cartera vencida, solicitudes nuevas, mensajes pendientes y contratos próximos a vencer. Gráfico de ingresos esperados vs. recaudados (12 meses) y ocupación por edificio. |
 | **Unidades** | Crear y editar apartaestudios, **subir el video y las fotos**, cambiar la disponibilidad desde la propia tarjeta. |
 | **Edificios** | Datos del edificio, zonas comunes, foto y **ficha del encargado**. La ubicación se fija haciendo clic en un mapa. |
-| **Contratos** | Quién arrienda qué, desde cuándo y por cuánto. Marca solo la unidad como arrendada. Historial de pagos por contrato. |
+| **Contratos** | Quién arrienda qué, desde cuándo y por cuánto. Marca solo la unidad como arrendada. Historial de pagos por contrato y resumen imprimible para guardar como PDF. |
 | **Pagos** | Registro mes a mes, con método y referencia. Filtros por periodo y contrato. Exportación a CSV. |
 | **Cartera** | Meses sin pago completo por inquilino, saldo acumulado y botón de WhatsApp para cobrar. |
 | **Mensajes** | Envía avisos privados a un inquilino o a todos los inquilinos activos de un edificio: recordatorios de pago, convivencia/ruido, mantenimiento e información general. Incluye plantillas, prioridad, confirmación de lectura y seguimiento de tickets de mantenimiento (abierta → en proceso → resuelta). |
 | **Solicitudes** | Interesados que llegaron por el sitio, con estado (nueva → contactada → visita → cerrada). |
+| **Agenda de visitas** | Agenda los horarios solicitados, ordenados por fecha, y enlaza a su gestión comercial. |
 | **Multimedia** | Todos los videos y fotos subidos, cuánto ocupan y en qué unidad se usan. |
 | **Administradores** | Solo el propietario: crea cuentas de administrador de edificio, les asigna uno o más edificios, pausa accesos, restablece claves y elimina cuentas. |
+| **Actividad** | Solo el propietario: bitácora de cambios, envíos y solicitudes. Nunca guarda claves ni textos de mensajes. |
 | **Ajustes** | El propietario cambia nombre del sitio, contacto y moneda. Cada administrador puede cambiar únicamente su propio usuario y contraseña. |
 
 ### Roles administrativos
@@ -90,7 +96,8 @@ documento y esa clave en `/inquilino`.
 
 El portal muestra únicamente los datos de su propia unidad, contrato, estado del
 pago actual, historial de pagos, datos del encargado y mensajes privados. El
-inquilino también puede escribir a administración y marcar los avisos como leídos.
+inquilino también puede escribir a administración, adjuntar hasta cinco fotos
+privadas a un reporte de mantenimiento y marcar los avisos como leídos.
 Las claves se guardan derivadas con `scrypt`; no se guardan ni se devuelven en texto
 plano.
 
@@ -136,7 +143,9 @@ bórrala y vuelve a arrancar el servidor: se recrea con los datos de ejemplo.
 
 La contraseña se guarda derivada con `scrypt` más una sal aleatoria; nunca en
 texto plano. Las sesiones viven en memoria y duran 8 horas, así que reiniciar el
-servidor cierra las sesiones abiertas.
+servidor cierra las sesiones abiertas. Los accesos de administrador e inquilino
+se bloquean temporalmente después de cinco intentos fallidos consecutivos por
+usuario y dirección de red.
 
 ---
 
@@ -175,7 +184,9 @@ public/
 
 Esto está pensado para correr en una red local o detrás de un proxy. Si lo vas a
 exponer públicamente, pon un proxy con HTTPS delante (Caddy o Nginx), cambia la
-contraseña y considera limitar el número de intentos de acceso.
+contraseña inicial y usa una base de datos y almacenamiento persistente. Ya hay
+un bloqueo temporal de intentos, pero no sustituye HTTPS ni un servicio de
+protección contra ataques en producción.
 
 ### Demo rápida en Render
 

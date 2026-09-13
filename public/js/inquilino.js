@@ -150,6 +150,7 @@
           ${noLeido ? '<span class="chip chip-reservado">Nuevo</span>' : ''}</div>
           <div class="mini tenue" style="margin-top:3px">${administracion ? 'Administración' : 'Tu mensaje'} · ${esc(fechaTexto(m.creado))}</div>
           <p class="texto">${esc(m.cuerpo)}</p>
+          ${(m.adjuntos || []).length ? `<div class="fila-wrap" style="gap:7px;margin-top:9px">${m.adjuntos.map((a, i) => `<button class="btn btn-sm" type="button" data-adjunto="${esc(a.id)}">Ver foto ${i + 1}</button>`).join('')}</div>` : ''}
           ${noLeido ? `<div class="pie-mensaje"><button class="btn btn-sm" type="button" data-leer="${esc(m.id)}">Marcar como leído</button></div>` : ''}
         </div>
       </li>`;
@@ -162,7 +163,38 @@
         await recargar();
       } catch (err) { nota(err.message, 'error'); b.disabled = false; }
     }));
+    $$('#i-mensajes [data-adjunto]').forEach((b) => b.addEventListener('click', () => abrirAdjunto(b.dataset.adjunto)));
     $$('#i-pagos [data-recibo]').forEach((b) => b.addEventListener('click', () => abrirReciboPago(b.dataset.recibo)));
+  }
+
+  async function abrirAdjunto(idMedio) {
+    try {
+      const r = await fetch('/api/media/' + encodeURIComponent(idMedio), {
+        headers: { Authorization: 'Bearer ' + token.get() },
+      });
+      if (!r.ok) throw new Error('No fue posible abrir la imagen.');
+      const url = URL.createObjectURL(await r.blob());
+      const m = modal({
+        titulo: 'Foto adjunta', tamano: 'lg',
+        cuerpo: `<img src="${url}" alt="Foto adjunta a la solicitud" style="display:block;max-width:100%;max-height:68vh;margin:auto;border-radius:10px">`,
+        pie: '<button class="btn" type="button" data-cerrar>Cerrar</button>',
+        alCerrar: () => URL.revokeObjectURL(url),
+      });
+      m.caja.querySelector('[data-cerrar]').addEventListener('click', m.cerrar);
+    } catch (e) { nota(e.message, 'error'); }
+  }
+
+  async function subirAdjunto(archivo) {
+    const cabeceras = {
+      Authorization: 'Bearer ' + token.get(),
+      'Content-Type': archivo.type,
+      'X-Nombre': btoa(unescape(encodeURIComponent(archivo.name))),
+    };
+    const r = await fetch('/api/inquilino/adjuntos', { method: 'POST', headers: cabeceras, body: archivo });
+    let respuesta = null;
+    try { respuesta = await r.json(); } catch {}
+    if (!r.ok) throw new Error(respuesta?.error || 'No fue posible subir una imagen.');
+    return respuesta;
   }
 
   function abrirReciboPago(pagoId) {
@@ -240,13 +272,29 @@
     aviso.innerHTML = '';
     try {
       const d = Object.fromEntries(new FormData(form).entries());
-      await apiInquilino('/api/inquilino/mensajes', { method: 'POST', body: { ...d, prioridad: d.prioridad ? 'alta' : 'normal' } });
+      const archivos = [...($('#im-adjuntos').files || [])];
+      if (archivos.length > 5) throw new Error('Puedes adjuntar hasta 5 imágenes.');
+      if (archivos.length && d.categoria !== 'mantenimiento') {
+        throw new Error('Selecciona la categoría Mantenimiento para adjuntar fotos.');
+      }
+      if (archivos.some((a) => !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(a.type))) {
+        throw new Error('Adjunta únicamente imágenes PNG, JPG, WEBP o GIF.');
+      }
+      if (archivos.some((a) => a.size > 10 * 1024 * 1024)) throw new Error('Cada imagen debe pesar máximo 10 MB.');
+      const adjuntos = [];
+      for (let i = 0; i < archivos.length; i++) {
+        boton.textContent = `Subiendo foto ${i + 1} de ${archivos.length}…`;
+        const subido = await subirAdjunto(archivos[i]);
+        adjuntos.push(subido.id);
+      }
+      boton.textContent = 'Enviando mensaje…';
+      await apiInquilino('/api/inquilino/mensajes', { method: 'POST', body: { ...d, adjuntos, prioridad: d.prioridad ? 'alta' : 'normal' } });
       form.reset();
       await recargar();
       nota('Tu mensaje fue enviado a administración.', 'bien');
     } catch (e) {
       aviso.innerHTML = `<div class="aviso aviso-error">${esc(e.message)}</div>`;
-    } finally { boton.disabled = false; }
+    } finally { boton.disabled = false; boton.textContent = 'Enviar mensaje'; }
   });
 
   arrancar();
