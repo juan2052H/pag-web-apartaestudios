@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Apartaestudios en arriendo · video y ubicación</title>
 <meta name="description" content="Encuentra apartaestudios disponibles: mira el video de cada unidad, ubica el edificio en el mapa y contacta directamente al encargado.">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#2a78d6">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Apartaestudios en arriendo · video y ubicación">
+<meta property="og:description" content="Mira videos reales, encuentra la ubicación del edificio y consulta unidades disponibles.">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebSite","name":"Apartaestudios","inLanguage":"es-CO","description":"Catálogo de apartaestudios en arriendo con video, ubicación y contacto."}
+</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="/css/base.css">
@@ -23,8 +31,9 @@
       <a href="#mapa-seccion" class="oculta-movil">Ubicación</a>
       <a href="#edificios" class="oculta-movil">Edificios</a>
       <a href="#contacto">Contacto</a>
+      <a href="/acceso" class="oculta-chico">Accesos</a>
       <button class="icono-btn" id="btn-tema" type="button" aria-label="Cambiar tema">☾</button>
-      <a href="/admin" class="btn btn-sm" style="margin-left:6px">Admin</a>
+      <a href="/acceso" class="btn btn-sm" style="margin-left:6px">Ingresar</a>
     </nav>
   </div>
 </header>
@@ -170,8 +179,7 @@
   <div class="contenedor">
     <span id="pie-nombre">Apartaestudios</span>
     <span class="tenue mini" id="pie-contacto"></span>
-    <a href="/inquilino" class="mini">Portal del inquilino</a>
-    <a href="/admin" class="mini">Ingreso administrativo</a>
+    <a href="/acceso" class="mini">Accesos privados</a>
   </div>
 </footer>
 

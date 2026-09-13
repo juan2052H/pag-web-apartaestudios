@@ -426,6 +426,38 @@ async function servirEstatico(req, res, ruta) {
   }
 }
 
+/** Origen seguro para URLs que leen los buscadores detrás de un proxy HTTPS. */
+function origenPublico(req) {
+  const hostRecibido = String(req.headers.host || 'localhost').toLowerCase();
+  const host = /^[a-z0-9.:-]+$/.test(hostRecibido) ? hostRecibido : 'localhost';
+  const protoRecibido = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const proto = protoRecibido === 'https' || protoRecibido === 'http'
+    ? protoRecibido
+    : 'http';
+  return `${proto}://${host}`;
+}
+
+function responderTexto(req, res, tipo, cuerpo) {
+  res.writeHead(200, {
+    'Content-Type': `${tipo}; charset=utf-8`,
+    'Content-Length': Buffer.byteLength(cuerpo),
+    'Cache-Control': 'public, max-age=3600',
+  });
+  if (req.method === 'HEAD') return res.end();
+  return res.end(cuerpo);
+}
+
+function servirRobots(req, res) {
+  const cuerpo = `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /inquilino\nDisallow: /acceso\n\nSitemap: ${origenPublico(req)}/sitemap.xml\n`;
+  return responderTexto(req, res, 'text/plain', cuerpo);
+}
+
+function servirSitemap(req, res) {
+  const origen = origenPublico(req);
+  const cuerpo = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${origen}/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n</urlset>\n`;
+  return responderTexto(req, res, 'application/xml', cuerpo);
+}
+
 /** Sirve un archivo subido, con soporte de Range (necesario para video). */
 async function servirMedia(req, res, mediaId) {
   const m = db.media.find((x) => x.id === mediaId);
@@ -1236,6 +1268,8 @@ const servidor = http.createServer(async (req, res) => {
   try {
     if (url.pathname.startsWith('/api/')) return await manejarApi(req, res, url);
     if (req.method !== 'GET' && req.method !== 'HEAD') return error(res, 405, 'Método no permitido');
+    if (url.pathname === '/robots.txt') return servirRobots(req, res);
+    if (url.pathname === '/sitemap.xml') return servirSitemap(req, res);
     return await servirEstatico(req, res, url.pathname);
   } catch (e) {
     console.error('Error:', e);

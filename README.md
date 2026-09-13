@@ -21,6 +21,7 @@ node server.js
 | | |
 |---|---|
 | Sitio público | http://localhost:3000/ |
+| Página de accesos | http://localhost:3000/acceso |
 | Panel administrativo | http://localhost:3000/admin |
 | Portal del inquilino | http://localhost:3000/inquilino |
 | Usuario inicial | `admin` |
@@ -165,3 +166,12 @@ el plan Free, `npm install` y `npm start`. Sirve para una demostración, pero Re
 elimina el contenido local de `datos/` al reiniciar o suspender el servicio. Para
 uso real, migra la base y los archivos subidos a almacenamiento persistente antes
 de publicar datos de inquilinos.
+
+### Acceso público e indexación
+
+La página pública `/acceso` dirige al portal del inquilino y a administración sin
+omitir sus credenciales. Las rutas privadas (`/admin`, `/inquilino` y `/acceso`)
+están excluidas de los buscadores. Al publicar el proyecto, visita
+`https://tu-dominio/robots.txt` y envía `https://tu-dominio/sitemap.xml` a Google
+Search Console. El sitemap se construye automáticamente con el dominio desde el
+que se solicite.

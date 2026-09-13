@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accesos privados · Apartaestudios</title>
+<meta name="description" content="Acceso al portal del inquilino y al panel administrativo de apartaestudios.">
+<meta name="robots" content="noindex,follow">
+<meta name="theme-color" content="#2a78d6">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⌂</text></svg>">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/acceso.css">
+</head>
+<body class="pagina-acceso">
+  <header class="acceso-cabecera">
+    <div class="contenedor">
+      <a href="/" class="acceso-marca"><span>◈</span><b>Apartaestudios</b></a>
+      <a class="btn btn-sm" href="/">← Ver sitio público</a>
+    </div>
+  </header>
+
+  <main class="contenedor acceso-principal">
+    <section class="acceso-intro">
+      <span class="sobrelinea-acceso">ÁREA PRIVADA</span>
+      <h1>Elige tu acceso</h1>
+      <p>Ingresa al espacio que corresponde a tu rol. Cada área solicita sus propias credenciales y mantiene la información protegida.</p>
+    </section>
+
+    <section class="rejilla-accesos" aria-label="Opciones de acceso">
+      <article class="tarjeta opcion-acceso">
+        <div class="icono-acceso inquilino-icono">⌂</div>
+        <span class="sobrelinea-acceso">RESIDENTES</span>
+        <h2>Portal del inquilino</h2>
+        <p>Consulta tu contrato, pagos registrados, saldo actual, mensajes privados y los datos de la administración.</p>
+        <div class="requisitos-acceso"><span>Necesitas</span><strong>Documento y clave de acceso</strong></div>
+        <a class="btn btn-primario btn-bloque" href="/inquilino">Entrar como inquilino</a>
+        <p class="mini tenue centro">¿No tienes clave? Solicítala a la administración.</p>
+      </article>
+
+      <article class="tarjeta opcion-acceso">
+        <div class="icono-acceso admin-icono">⚙</div>
+        <span class="sobrelinea-acceso">GESTIÓN</span>
+        <h2>Panel administrativo</h2>
+        <p>Administra disponibilidad, videos, edificios, contratos, pagos, cartera, mensajes y solicitudes.</p>
+        <div class="requisitos-acceso"><span>Necesitas</span><strong>Usuario y contraseña de administración</strong></div>
+        <a class="btn btn-bloque" href="/admin">Entrar a administración</a>
+        <p class="mini tenue centro">Acceso exclusivo para personal autorizado.</p>
+      </article>
+    </section>
+
+    <aside class="aviso aviso-ojo acceso-seguro">
+      <span>🔒</span><span>Por seguridad, nunca compartas tus credenciales ni información de pagos con terceros. Esta página solo dirige a los accesos; no permite ver información privada sin iniciar sesión.</span>
+    </aside>
+  </main>
+</body>
+</html>
