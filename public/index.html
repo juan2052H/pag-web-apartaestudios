@@ -165,6 +165,21 @@
             <label for="c-mensaje">Mensaje</label>
             <textarea id="c-mensaje" name="mensaje" placeholder="¿Desde cuándo lo necesitas? ¿Alguna pregunta?"></textarea>
           </div>
+          <div class="rejilla-campos">
+            <div class="campo">
+              <label for="c-fecha-visita">Fecha preferida de visita</label>
+              <input id="c-fecha-visita" name="fechaVisita" type="date">
+            </div>
+            <div class="campo">
+              <label for="c-hora-visita">Franja horaria</label>
+              <select id="c-hora-visita" name="horaVisita">
+                <option value="">Sin preferencia</option>
+                <option value="08:00">Mañana · 8:00 a.m. – 12:00 m.</option>
+                <option value="14:00">Tarde · 2:00 p.m. – 6:00 p.m.</option>
+                <option value="18:00">Después de las 6:00 p.m.</option>
+              </select>
+            </div>
+          </div>
           <div id="c-aviso"></div>
           <button class="btn btn-primario btn-lg btn-bloque" type="submit">Enviar solicitud</button>
           <p class="mini tenue centro" style="margin:0">Te responderemos en menos de 24 horas hábiles.</p>

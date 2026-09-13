@@ -216,6 +216,8 @@
           k.solicitudesNuevas ? '<span class="delta-mal">Pendientes de contactar</span>' : 'Todo atendido')}
         ${kpi('Mensajes sin leer', numero(k.mensajesSinLeer || 0),
           k.mensajesSinLeer ? '<span class="delta-mal">Requieren respuesta</span>' : 'Bandeja al día')}
+        ${kpi('Mantenimientos', numero(k.mantenimientosPendientes || 0),
+          k.mantenimientosPendientes ? '<span class="delta-mal">Solicitudes por gestionar</span>' : 'Sin solicitudes abiertas')}
         ${kpi('Contratos por vencer', numero(k.contratosPorVencer || 0),
           k.contratosPorVencer ? '<span class="delta-mal">Vencen en los próximos 30 días</span>' : 'Sin vencimientos próximos')}
       </div>
@@ -1146,12 +1148,16 @@
           const c = contrato(x.contratoId);
           const esInquilino = x.tipo === 'inquilino';
           const noLeido = esInquilino ? !x.leidoAdmin : !x.leidoInquilino;
+          const esMantenimiento = esInquilino && x.categoria === 'mantenimiento';
+          const estadoGestion = x.estadoGestion || 'abierta';
+          const textoGestion = { abierta: 'Abierta', en_proceso: 'En proceso', resuelta: 'Resuelta' }[estadoGestion] || 'Abierta';
           return `<li class="mensaje ${noLeido ? 'sin-leer' : ''}">
             <div class="mensaje-tipo">${esInquilino ? 'INQ' : 'ADM'}</div>
             <div class="crece">
               <div class="fila-wrap" style="gap:7px">
                 <strong>${esc(x.asunto || 'Sin asunto')}</strong>
                 ${x.prioridad === 'alta' ? '<span class="chip chip-vencido">Prioridad alta</span>' : ''}
+                ${esMantenimiento ? `<span class="chip ${estadoGestion === 'resuelta' ? 'chip-disponible' : estadoGestion === 'en_proceso' ? 'chip-reservado' : 'chip-vencido'}">Mantenimiento · ${esc(textoGestion)}</span>` : ''}
                 ${noLeido ? '<span class="chip chip-reservado">Sin leer</span>' : ''}
               </div>
               <div class="mini tenue" style="margin-top:3px">
@@ -1160,6 +1166,11 @@
               <p class="mensaje-cuerpo">${esc(x.cuerpo)}</p>
             </div>
             <div class="pila mensaje-acciones">
+              ${esMantenimiento ? `<select class="control mini" data-gestion="${esc(x.id)}" style="width:auto;padding:5px 8px">
+                <option value="abierta" ${estadoGestion === 'abierta' ? 'selected' : ''}>Abierta</option>
+                <option value="en_proceso" ${estadoGestion === 'en_proceso' ? 'selected' : ''}>En proceso</option>
+                <option value="resuelta" ${estadoGestion === 'resuelta' ? 'selected' : ''}>Resuelta</option>
+              </select>` : ''}
               ${esInquilino && noLeido ? `<button class="btn btn-sm" type="button" data-leer="${esc(x.id)}">Marcar leído</button>` : ''}
               ${c ? `<button class="btn btn-sm btn-primario" type="button" data-responder="${esc(c.id)}">Responder</button>` : ''}
               <button class="btn btn-sm btn-peligro" type="button" data-borrar-mensaje="${esc(x.id)}" aria-label="Eliminar mensaje">×</button>
@@ -1173,6 +1184,11 @@
     $$('#v-mensajes [data-responder]').forEach((b) => b.addEventListener('click', () => formMensaje(b.dataset.responder)));
     $$('#v-mensajes [data-leer]').forEach((b) => b.addEventListener('click', async () => {
       await operar(() => api(`/api/mensajes/${b.dataset.leer}/leido`, { method: 'PUT' }), 'Mensaje marcado como leído');
+    }));
+    $$('#v-mensajes [data-gestion]').forEach((s) => s.addEventListener('change', async () => {
+      await operar(() => api(`/api/mensajes/${s.dataset.gestion}/gestion`, {
+        method: 'PUT', body: { estadoGestion: s.value },
+      }), 'Estado de mantenimiento actualizado');
     }));
     $$('#v-mensajes [data-borrar-mensaje]').forEach((b) => b.addEventListener('click', async () => {
       if (!(await confirmar('¿Eliminar este mensaje del historial?', { titulo: 'Eliminar mensaje', textoOk: 'Eliminar' }))) return;
@@ -1467,6 +1483,7 @@
                 ${x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : ''}
               </div>
               <div class="mini tenue">Interés: ${esc(x.apartamentoId ? nombreUnidad(apartamento(x.apartamentoId)) : 'sin unidad específica')}</div>
+              ${x.fechaVisita ? `<div class="mini" style="margin-top:5px;color:var(--acento-ink);font-weight:600">Visita preferida: ${esc(fechaTexto(x.fechaVisita))}${x.horaVisita ? ' · ' + esc(x.horaVisita) : ''}</div>` : ''}
               ${x.mensaje ? `<p class="mini" style="margin:8px 0 0;padding:9px 12px;background:var(--superficie-2);border-radius:8px">${esc(x.mensaje)}</p>` : ''}
             </div>
             <div class="pila" style="gap:6px;align-items:flex-end">

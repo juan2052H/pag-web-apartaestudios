@@ -646,6 +646,8 @@ function calcularAnalitica(meses = 12) {
       contratosActivos: activos.filter((c) => contratoActivoEn(c, hoy)).length,
       solicitudesNuevas: db.solicitudes.filter((s) => s.estado === 'nueva').length,
       mensajesSinLeer: db.mensajes.filter((x) => x.tipo === 'inquilino' && !x.leidoAdmin).length,
+      mantenimientosPendientes: db.mensajes.filter((x) =>
+        x.tipo === 'inquilino' && x.categoria === 'mantenimiento' && x.estadoGestion !== 'resuelta').length,
       contratosPorVencer: vencimientos.filter((x) => x.dias <= 30).length,
       canonPromedio: arrendados
         ? Math.round(activos.filter((c) => contratoActivoEn(c, hoy)).reduce((s, c) => s + num(c.canon), 0) / Math.max(1, activos.filter((c) => contratoActivoEn(c, hoy)).length))
@@ -822,6 +824,7 @@ function vistaPortalInquilino(c) {
       id: x.id, asunto: x.asunto, cuerpo: x.cuerpo, tipo: x.tipo,
       prioridad: x.prioridad, categoria: x.categoria, creado: x.creado,
       leidoInquilino: !!x.leidoInquilino,
+      estadoGestion: x.estadoGestion || '', actualizadoGestion: x.actualizadoGestion || '',
     }));
 
   return {
@@ -875,6 +878,14 @@ async function manejarApi(req, res, url) {
     if (!texto(b.nombre) || !(texto(b.telefono) || texto(b.email))) {
       return error(res, 400, 'Necesitamos tu nombre y un teléfono o correo.');
     }
+    const fechaVisita = texto(b.fechaVisita, 10);
+    const horaVisita = texto(b.horaVisita, 5);
+    if (fechaVisita && (diasHasta(fechaVisita) === null || diasHasta(fechaVisita) < 0)) {
+      return error(res, 400, 'La fecha de visita debe ser hoy o una fecha futura.');
+    }
+    if (horaVisita && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(horaVisita)) {
+      return error(res, 400, 'La franja horaria no es válida.');
+    }
     const s = {
       id: id(),
       apartamentoId: texto(b.apartamentoId, 40),
@@ -882,6 +893,8 @@ async function manejarApi(req, res, url) {
       telefono: texto(b.telefono, 40),
       email: texto(b.email, 120),
       mensaje: texto(b.mensaje, 1500),
+      fechaVisita,
+      horaVisita,
       estado: 'nueva',
       creado: ahora(),
     };
@@ -931,13 +944,16 @@ async function manejarApi(req, res, url) {
       const cuerpo = texto(b.cuerpo, 1500).trim();
       if (!cuerpo) return error(res, 400, 'Escribe el mensaje que quieres enviar.');
       const categorias = ['pago', 'mantenimiento', 'convivencia', 'otro'];
+      const categoria = categorias.includes(b.categoria) ? b.categoria : 'otro';
       const reg = {
         id: id(), contratoId: c.id,
         asunto: texto(b.asunto, 160).trim() || 'Mensaje del inquilino',
         cuerpo,
         tipo: 'inquilino',
-        categoria: categorias.includes(b.categoria) ? b.categoria : 'otro',
+        categoria,
         prioridad: b.prioridad === 'alta' ? 'alta' : 'normal',
+        estadoGestion: categoria === 'mantenimiento' ? 'abierta' : '',
+        actualizadoGestion: categoria === 'mantenimiento' ? ahora() : '',
         leidoAdmin: false, leidoInquilino: true, creado: ahora(),
       };
       db.mensajes.unshift(reg);
@@ -1161,6 +1177,21 @@ async function manejarApi(req, res, url) {
         msg.leidoAdminEn = ahora();
         await guardarDb();
       }
+      return ok(res, msg);
+    }
+    if (m === 'PUT' && recurso && partes[3] === 'gestion') {
+      const msg = db.mensajes.find((x) => x.id === recurso);
+      if (!msg) return error(res, 404, 'Mensaje no encontrado');
+      if (msg.tipo !== 'inquilino' || msg.categoria !== 'mantenimiento') {
+        return error(res, 400, 'Solo las solicitudes de mantenimiento tienen estado de gestión.');
+      }
+      const b = await leerJson(req);
+      if (!['abierta', 'en_proceso', 'resuelta'].includes(b.estadoGestion)) {
+        return error(res, 400, 'Estado de mantenimiento no válido.');
+      }
+      msg.estadoGestion = b.estadoGestion;
+      msg.actualizadoGestion = ahora();
+      await guardarDb();
       return ok(res, msg);
     }
     if (m === 'DELETE' && recurso) {

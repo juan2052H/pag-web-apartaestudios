@@ -49,7 +49,8 @@ contratos y su historial de pagos, para que puedas ver todo funcionando de una v
   mini mapa con enlace a "cómo llegar" y la tarjeta del **encargado del edificio**
   con teléfono, correo, horario y botón directo de WhatsApp.
 - **Formulario de solicitud**: lo que se envía aparece en el panel como una
-  solicitud nueva, con contador en el menú lateral.
+  solicitud nueva, con contador en el menú lateral. El interesado puede indicar
+  fecha y franja horaria preferidas para una visita.
 - **Tema claro y oscuro**, y enlaces profundos: `/#apto-<id>` abre esa ficha.
 
 ## Qué hace el panel administrativo
@@ -62,7 +63,7 @@ contratos y su historial de pagos, para que puedas ver todo funcionando de una v
 | **Contratos** | Quién arrienda qué, desde cuándo y por cuánto. Marca solo la unidad como arrendada. Historial de pagos por contrato. |
 | **Pagos** | Registro mes a mes, con método y referencia. Filtros por periodo y contrato. Exportación a CSV. |
 | **Cartera** | Meses sin pago completo por inquilino, saldo acumulado y botón de WhatsApp para cobrar. |
-| **Mensajes** | Envía avisos privados a un inquilino o a todos los inquilinos activos de un edificio: recordatorios de pago, convivencia/ruido, mantenimiento e información general. Incluye plantillas, prioridad y confirmación de lectura. |
+| **Mensajes** | Envía avisos privados a un inquilino o a todos los inquilinos activos de un edificio: recordatorios de pago, convivencia/ruido, mantenimiento e información general. Incluye plantillas, prioridad, confirmación de lectura y seguimiento de tickets de mantenimiento (abierta → en proceso → resuelta). |
 | **Solicitudes** | Interesados que llegaron por el sitio, con estado (nueva → contactada → visita → cerrada). |
 | **Multimedia** | Todos los videos y fotos subidos, cuánto ocupan y en qué unidad se usan. |
 | **Ajustes** | Nombre del sitio, contacto, moneda, cambio de usuario y contraseña, exportaciones. |
@@ -78,6 +79,9 @@ pago actual, historial de pagos, datos del encargado y mensajes privados. El
 inquilino también puede escribir a administración y marcar los avisos como leídos.
 Las claves se guardan derivadas con `scrypt`; no se guardan ni se devuelven en texto
 plano.
+
+Cada pago registrado tiene un **comprobante imprimible** desde el portal. El
+inquilino puede guardarlo como PDF desde el cuadro de impresión de su navegador.
 
 ### Avisos y vencimientos
 

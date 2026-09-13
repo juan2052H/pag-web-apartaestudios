@@ -3,7 +3,7 @@
    ========================================================================== */
 
 (() => {
-  const { $, $$, esc, dinero, numero, mesTexto, fechaTexto, iniciales, nota } = App;
+  const { $, $$, esc, dinero, numero, mesTexto, fechaTexto, iniciales, nota, modal } = App;
   const CLAVE_TOKEN = 'apartaestudios.inquilino.token';
   let datos = null;
 
@@ -135,8 +135,8 @@
         <div>${pendiente ? `<span class="chip chip-vencido">Pendiente ${esc(dinero(pendiente))}</span>` : '<span class="chip chip-disponible">Pago al día</span>'}
           <p class="mini tenue" style="margin:8px 0 0;max-width:310px">Si ya realizaste un pago, envía el comprobante a administración para que sea registrado.</p></div>
       </div>
-      ${pagos.length ? `<div class="tabla-marco"><table class="tabla"><thead><tr><th>Periodo</th><th>Fecha registrada</th><th>Método</th><th class="num">Monto</th></tr></thead>
-        <tbody>${pagos.map((x) => `<tr><td style="font-weight:600">${esc(mesTexto(x.periodo))}</td><td class="tenue">${esc(fechaTexto(x.fecha))}</td><td class="tenue">${esc(x.metodo)}${x.referencia ? ' · ' + esc(x.referencia) : ''}</td><td class="num">${esc(dinero(x.monto))}</td></tr>`).join('')}</tbody></table></div>`
+      ${pagos.length ? `<div class="tabla-marco"><table class="tabla"><thead><tr><th>Periodo</th><th>Fecha registrada</th><th>Método</th><th class="num">Monto</th><th class="acciones"></th></tr></thead>
+        <tbody>${pagos.map((x) => `<tr><td style="font-weight:600">${esc(mesTexto(x.periodo))}</td><td class="tenue">${esc(fechaTexto(x.fecha))}</td><td class="tenue">${esc(x.metodo)}${x.referencia ? ' · ' + esc(x.referencia) : ''}</td><td class="num">${esc(dinero(x.monto))}</td><td class="acciones"><button class="btn btn-sm" type="button" data-recibo="${esc(x.id)}">Comprobante</button></td></tr>`).join('')}</tbody></table></div>`
         : '<div class="vacio"><h3>Aún no hay pagos registrados</h3><p>Los pagos que confirme administración aparecerán aquí.</p></div>'}`;
 
     $('#i-mensajes').innerHTML = datos.mensajes.length ? `<ul class="lista-inq">${datos.mensajes.map((m) => {
@@ -146,6 +146,7 @@
         <div class="tipo-inq">${administracion ? 'ADM' : 'TÚ'}</div>
         <div class="crece"><div class="fila-wrap" style="gap:7px"><strong>${esc(m.asunto || 'Sin asunto')}</strong>
           ${m.prioridad === 'alta' ? '<span class="chip chip-vencido">Atención pronta</span>' : ''}
+          ${m.tipo === 'inquilino' && m.categoria === 'mantenimiento' ? `<span class="chip ${(m.estadoGestion || 'abierta') === 'resuelta' ? 'chip-disponible' : (m.estadoGestion || 'abierta') === 'en_proceso' ? 'chip-reservado' : 'chip-vencido'}">Mantenimiento · ${esc(({ abierta: 'Abierta', en_proceso: 'En proceso', resuelta: 'Resuelta' }[m.estadoGestion || 'abierta']))}</span>` : ''}
           ${noLeido ? '<span class="chip chip-reservado">Nuevo</span>' : ''}</div>
           <div class="mini tenue" style="margin-top:3px">${administracion ? 'Administración' : 'Tu mensaje'} · ${esc(fechaTexto(m.creado))}</div>
           <p class="texto">${esc(m.cuerpo)}</p>
@@ -161,6 +162,44 @@
         await recargar();
       } catch (err) { nota(err.message, 'error'); b.disabled = false; }
     }));
+    $$('#i-pagos [data-recibo]').forEach((b) => b.addEventListener('click', () => abrirReciboPago(b.dataset.recibo)));
+  }
+
+  function abrirReciboPago(pagoId) {
+    const pago = (datos.pagos || []).find((x) => x.id === pagoId);
+    if (!pago) return;
+    const c = datos.contrato;
+    const a = datos.apartamento;
+    const e = datos.edificio;
+    const contenido = `
+      <div class="recibo-pago">
+        <span class="sobrelinea">COMPROBANTE DE PAGO</span>
+        <h2>${esc(e.nombre || 'Apartaestudios')}</h2>
+        <p class="tenue">Pago registrado para ${esc(a.titulo || 'unidad ' + a.numero)}</p>
+        <div class="recibo-datos">
+          <div><span>Inquilino</span><strong>${esc(c.inquilino?.nombre || '—')}</strong></div>
+          <div><span>Unidad</span><strong>${esc(a.numero || '—')}</strong></div>
+          <div><span>Periodo</span><strong>${esc(mesTexto(pago.periodo))}</strong></div>
+          <div><span>Fecha de registro</span><strong>${esc(fechaTexto(pago.fecha))}</strong></div>
+          <div><span>Método</span><strong>${esc(pago.metodo || '—')}</strong></div>
+          <div><span>Referencia</span><strong>${esc(pago.referencia || 'No registrada')}</strong></div>
+        </div>
+        <div class="recibo-total"><span>Monto recibido</span><strong>${esc(dinero(pago.monto))}</strong></div>
+        ${pago.notas ? `<p class="mini tenue" style="margin:15px 0 0">Notas: ${esc(pago.notas)}</p>` : ''}
+      </div>`;
+    const m = modal({
+      titulo: 'Comprobante de pago', tamano: 'sm', cuerpo: contenido,
+      pie: '<button class="btn" type="button" data-cerrar>Cerrar</button><button class="btn btn-primario" type="button" data-imprimir>Imprimir / Guardar PDF</button>',
+    });
+    m.caja.querySelector('[data-cerrar]').addEventListener('click', m.cerrar);
+    m.caja.querySelector('[data-imprimir]').addEventListener('click', () => imprimirRecibo(contenido));
+  }
+
+  function imprimirRecibo(contenido) {
+    const ventana = window.open('', '_blank', 'noopener,noreferrer,width=700,height=760');
+    if (!ventana) return nota('El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes e inténtalo de nuevo.', 'error');
+    ventana.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Comprobante de pago</title><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#111;margin:0;padding:40px}.recibo-pago{max-width:620px;margin:auto;border:1px solid #ddd;border-radius:14px;padding:28px}.sobrelinea{font-size:11px;color:#1c5cab;font-weight:700;letter-spacing:.1em}.recibo-pago h2{margin:7px 0 3px}.tenue{color:#555}.recibo-datos{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}.recibo-datos div{border-bottom:1px solid #e5e5e5;padding-bottom:9px}.recibo-datos span{display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.06em}.recibo-datos strong{display:block;margin-top:3px}.recibo-total{display:flex;justify-content:space-between;align-items:center;padding:16px;border-radius:10px;background:#eef6ff}.recibo-total strong{font-size:22px}@media print{body{padding:0}.recibo-pago{border:0}}</style></head><body>${contenido}<script>window.onload=()=>window.print()<\/script></body></html>`);
+    ventana.document.close();
   }
 
   $('#form-acceso-inq').addEventListener('submit', async (ev) => {

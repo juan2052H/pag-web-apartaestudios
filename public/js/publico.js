@@ -516,6 +516,8 @@
 
   function conectarFormulario() {
     const form = $('#form-contacto');
+    const fechaVisita = $('#c-fecha-visita');
+    if (fechaVisita) fechaVisita.min = new Date().toISOString().slice(0, 10);
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const aviso = $('#c-aviso');
