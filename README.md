@@ -171,7 +171,7 @@ de publicar datos de inquilinos.
 
 La página pública `/acceso` dirige al portal del inquilino y a administración sin
 omitir sus credenciales. Las rutas privadas (`/admin`, `/inquilino` y `/acceso`)
-están excluidas de los buscadores. Al publicar el proyecto, visita
+usan `noindex` y no se incluyen en el sitemap. Al publicar el proyecto, visita
 `https://tu-dominio/robots.txt` y envía `https://tu-dominio/sitemap.xml` a Google
 Search Console. El sitemap se construye automáticamente con el dominio desde el
 que se solicite.

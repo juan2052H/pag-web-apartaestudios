@@ -448,7 +448,9 @@ function responderTexto(req, res, tipo, cuerpo) {
 }
 
 function servirRobots(req, res) {
-  const cuerpo = `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /inquilino\nDisallow: /acceso\n\nSitemap: ${origenPublico(req)}/sitemap.xml\n`;
+  // Las áreas privadas llevan meta noindex. No se bloquean aquí para que los
+  // buscadores puedan leer esa directiva; robots.txt no es una barrera de seguridad.
+  const cuerpo = `User-agent: *\nAllow: /\n\nSitemap: ${origenPublico(req)}/sitemap.xml\n`;
   return responderTexto(req, res, 'text/plain', cuerpo);
 }
 
