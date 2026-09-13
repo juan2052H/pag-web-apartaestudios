@@ -1,12 +1,15 @@
 <!doctype html>
-<html lang="es">
+<html lang="es-CO">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Panel administrativo · Apartaestudios</title>
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#2a78d6">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link rel="preload" as="style" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" id="css-leaflet"
+      integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 <link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/publico.css">
 <link rel="stylesheet" href="/css/admin.css">
@@ -22,7 +25,7 @@
     <form id="form-acceso">
       <div class="campo">
         <label for="a-usuario">Usuario</label>
-        <input id="a-usuario" name="usuario" autocomplete="username" value="admin" required>
+        <input id="a-usuario" name="usuario" autocomplete="username" required>
       </div>
       <div class="campo">
         <label for="a-clave">Contraseña</label>
@@ -43,27 +46,27 @@
   <aside class="lateral" id="lateral">
     <a href="/" class="marca"><span class="logo">◈</span><span id="lat-nombre">Apartaestudios</span></a>
 
-    <button class="nav-item activo" data-vista="resumen"><span class="ic">◫</span> Resumen</button>
-    <button class="nav-item" data-vista="unidades"><span class="ic">⌂</span> Unidades</button>
-    <button class="nav-item" data-vista="edificios"><span class="ic">▤</span> Edificios</button>
+    <button class="nav-item activo" data-vista="resumen"><span class="ic" aria-hidden="true">◫</span> Resumen</button>
+    <button class="nav-item" data-vista="unidades"><span class="ic" aria-hidden="true">⌂</span> Unidades</button>
+    <button class="nav-item" data-vista="edificios"><span class="ic" aria-hidden="true">▤</span> Edificios</button>
 
     <div class="grupo">Arriendos</div>
-    <button class="nav-item" data-vista="contratos"><span class="ic">✎</span> Contratos</button>
-    <button class="nav-item" data-vista="pagos"><span class="ic">◎</span> Pagos</button>
-    <button class="nav-item" data-vista="cartera"><span class="ic">⚑</span> Cartera</button>
+    <button class="nav-item" data-vista="contratos"><span class="ic" aria-hidden="true">✎</span> Contratos</button>
+    <button class="nav-item" data-vista="pagos"><span class="ic" aria-hidden="true">◎</span> Pagos</button>
+    <button class="nav-item" data-vista="cartera"><span class="ic" aria-hidden="true">⚑</span> Cartera</button>
 
     <div class="grupo">Gestión</div>
-    <button class="nav-item" data-vista="mensajes"><span class="ic">☏</span> Mensajes<span class="globo" id="globo-mensajes" hidden>0</span></button>
-    <button class="nav-item" data-vista="solicitudes"><span class="ic">✉</span> Solicitudes<span class="globo" id="globo-solicitudes" hidden>0</span></button>
-    <button class="nav-item" data-vista="agenda"><span class="ic">◷</span> Agenda de visitas</button>
-    <button class="nav-item" data-vista="medios"><span class="ic">▶</span> Multimedia</button>
-    <button class="nav-item" data-vista="administradores" data-solo-principal hidden><span class="ic">♙</span> Administradores</button>
-    <button class="nav-item" data-vista="actividad" data-solo-principal hidden><span class="ic">◉</span> Actividad</button>
-    <button class="nav-item" data-vista="ajustes"><span class="ic">⚙</span> Ajustes</button>
+    <button class="nav-item" data-vista="mensajes"><span class="ic" aria-hidden="true">☏</span> Mensajes<span class="globo" id="globo-mensajes" hidden>0</span></button>
+    <button class="nav-item" data-vista="solicitudes"><span class="ic" aria-hidden="true">✉</span> Solicitudes<span class="globo" id="globo-solicitudes" hidden>0</span></button>
+    <button class="nav-item" data-vista="agenda"><span class="ic" aria-hidden="true">◷</span> Agenda de visitas</button>
+    <button class="nav-item" data-vista="medios"><span class="ic" aria-hidden="true">▶</span> Multimedia</button>
+    <button class="nav-item" data-vista="administradores" data-solo-principal hidden><span class="ic" aria-hidden="true">♙</span> Administradores</button>
+    <button class="nav-item" data-vista="actividad" data-solo-principal hidden><span class="ic" aria-hidden="true">◉</span> Actividad</button>
+    <button class="nav-item" data-vista="ajustes"><span class="ic" aria-hidden="true">⚙</span> Ajustes</button>
 
     <div class="pie-lateral">
-      <a class="nav-item" href="/" target="_blank"><span class="ic">↗</span> Ver sitio público</a>
-      <button class="nav-item" id="btn-salir"><span class="ic">⏻</span> Cerrar sesión</button>
+      <a class="nav-item" href="/" target="_blank"><span class="ic" aria-hidden="true">↗</span> Ver sitio público</a>
+      <button class="nav-item" id="btn-salir"><span class="ic" aria-hidden="true">⏻</span> Cerrar sesión</button>
     </div>
   </aside>
 
@@ -97,7 +100,8 @@
 
 <div class="cargando" id="arranque"><div class="spinner"></div><span>Cargando panel…</span></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script src="/js/comun.js"></script>
 <script src="/js/graficos.js"></script>
 <script src="/js/admin.js"></script>

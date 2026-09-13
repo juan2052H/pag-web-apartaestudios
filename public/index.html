@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="es-CO">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,11 +10,17 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="Apartaestudios en arriendo · video y ubicación">
 <meta property="og:description" content="Mira videos reales, encuentra la ubicación del edificio y consulta unidades disponibles.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Apartaestudios en arriendo · video y ubicación">
+<meta name="twitter:description" content="Mira videos reales, encuentra la ubicación del edificio y consulta unidades disponibles.">
+<link rel="canonical" href="/">
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebSite","name":"Apartaestudios","inLanguage":"es-CO","description":"Catálogo de apartaestudios en arriendo con video, ubicación y contacto."}
 </script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link rel="preload" as="style" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" id="css-leaflet"
+      integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 <link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/publico.css">
 </head>
@@ -27,12 +33,16 @@
       <span id="marca-nombre">Apartaestudios</span>
     </a>
     <nav class="nav">
-      <a href="#disponibles" class="oculta-chico">Disponibles</a>
-      <a href="#mapa-seccion" class="oculta-movil">Ubicación</a>
-      <a href="#edificios" class="oculta-movil">Edificios</a>
-      <a href="#contacto">Contacto</a>
-      <a href="/acceso" class="oculta-chico">Accesos</a>
+      <div class="nav-enlaces" id="nav-enlaces">
+        <a href="#disponibles" class="oculta-chico">Disponibles</a>
+        <a href="#mapa-seccion" class="oculta-movil">Ubicación</a>
+        <a href="#edificios" class="oculta-movil">Edificios</a>
+        <a href="#contacto">Contacto</a>
+        <a href="/acceso" class="oculta-chico">Accesos</a>
+      </div>
       <button class="icono-btn" id="btn-tema" type="button" aria-label="Cambiar tema">☾</button>
+      <button class="icono-btn btn-menu-movil" id="btn-menu" type="button"
+              aria-label="Abrir menú" aria-expanded="false" aria-controls="nav-enlaces">☰</button>
       <a href="/acceso" class="btn btn-sm" style="margin-left:6px">Ingresar</a>
     </nav>
   </div>
@@ -46,6 +56,7 @@
       <span class="pildora"><span class="punto"></span> <span id="pildora-texto">Cargando disponibilidad…</span></span>
       <h1 id="titulo-hero">Apartaestudios que puedes ver antes de visitar.</h1>
       <p class="lema" id="lema-hero">Cada unidad con su video real, la ubicación exacta del edificio y el contacto directo del encargado.</p>
+      <a href="#disponibles" class="btn btn-primario btn-lg" style="margin-top:18px">Ver unidades disponibles</a>
       <div class="hero-stats" id="hero-stats"></div>
     </div>
   </section>
@@ -199,7 +210,8 @@
   </div>
 </footer>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script src="/js/comun.js"></script>
 <script src="/js/publico.js"></script>
 </body>

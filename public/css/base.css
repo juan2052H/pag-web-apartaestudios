@@ -12,7 +12,7 @@
   --superficie-3:   #e7dccf;
   --ink:            #20352d;
   --ink-2:          #59665e;
-  --ink-3:          #7c887f;
+  --ink-3:          #5c675f;
   --linea:          #e4d9cc;
   --linea-fuerte:   #cbbcac;
 
@@ -374,7 +374,3 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: .88rem; min-wid
   animation: girar .7s linear infinite;
 }
 @keyframes girar { to { transform: rotate(360deg); } }
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
-}

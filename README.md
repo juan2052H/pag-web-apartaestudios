@@ -25,12 +25,28 @@ node server.js
 | Panel administrativo | http://localhost:3000/admin |
 | Portal del inquilino | http://localhost:3000/inquilino |
 | Propietario inicial | `admin` |
-| Contraseña inicial | `admin123` — **cámbiala en Ajustes → Seguridad** |
+| Contraseña inicial | generada al azar en el primer arranque — se imprime **una sola vez** en la consola del servidor. **Guárdala y cámbiala en Ajustes → Seguridad** |
 
 Para usar otro puerto: `PORT=8080 node server.js`.
 
 La primera vez se crea `datos/db.json` con dos edificios, cinco unidades, dos
 contratos y su historial de pagos, para que puedas ver todo funcionando de una vez.
+
+---
+
+## Pruebas
+
+```bash
+npm test
+```
+
+Usa el test runner que trae Node incluido (`node:test`), así que no hace falta
+instalar nada. Cada archivo de `test/` arranca una instancia real de
+`server.js` en un puerto propio y con los datos en una carpeta temporal —
+nunca toca `datos/db.json`. Cubre login y bloqueo por intentos fallidos,
+permisos por edificio, CRUD con sus borrados en cascada, el rechazo de
+archivos con el tipo falsificado, y el catálogo público (incluida la
+visibilidad de `/unidad/<id>` y el sitemap).
 
 ---
 
@@ -152,7 +168,9 @@ usuario y dirección de red.
 ## Estructura
 
 ```
-server.js              API + archivos estáticos + streaming de video (Node puro)
+server.js              Bootstrap: crea el servidor HTTP y arranca la carga de datos
+lib/                    API, permisos, modelos, sesiones y archivos estáticos (Node puro)
+test/                   Pruebas de integración (node:test) contra el servidor real
 public/
   index.html           sitio público
   admin.html           panel administrativo

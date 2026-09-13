@@ -25,7 +25,8 @@
   box-shadow: var(--sombra-1);
 }
 
-.nav { display: flex; gap: 2px; margin-left: auto; align-items: center; flex: none; }
+.nav { display: flex; gap: 2px; margin-left: auto; align-items: center; flex: none; position: relative; }
+.nav-enlaces { display: flex; gap: 2px; align-items: center; }
 .nav a {
   padding: 7px 13px; border-radius: 999px; text-decoration: none;
   color: var(--ink-2); font-size: .88rem; font-weight: 540;
@@ -37,6 +38,7 @@
   background: transparent; border: 1px solid var(--linea); color: var(--ink-2); padding: 0;
 }
 .icono-btn:hover { background: var(--superficie-2); color: var(--ink); }
+.btn-menu-movil { display: none; }
 
 @media (max-width: 760px) { .nav a.oculta-movil { display: none; } }
 @media (max-width: 560px) {
@@ -47,6 +49,24 @@
   .hero-stats .st { width: 50%; padding: 0 16px; }
   .hero-stats .st:nth-child(odd) { padding-left: 0; border-left: 0; }
 }
+
+/* --- Menú móvil: recupera en un panel desplegable los enlaces que se
+   ocultan arriba (oculta-movil/oculta-chico) para que sigan siendo
+   alcanzables en pantallas pequeñas. --- */
+@media (max-width: 760px) {
+  .btn-menu-movil { display: grid; }
+  .nav-enlaces {
+    position: fixed; top: 62px; left: 12px; right: 12px; z-index: 61;
+    flex-direction: column; align-items: stretch; gap: 2px;
+    background: var(--superficie); border: 1px solid var(--linea); border-radius: var(--r-md);
+    padding: 8px; box-shadow: var(--sombra-3);
+    transform: translateY(-8px); opacity: 0; pointer-events: none;
+    transition: transform .18s cubic-bezier(.2,.8,.3,1), opacity .18s ease;
+  }
+  .nav-enlaces.abierto { transform: none; opacity: 1; pointer-events: auto; }
+  .nav-enlaces.abierto a { display: block; padding: 11px 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .nav-enlaces { transition: none; } }
 
 /* --- Hero ----------------------------------------------------------------- */
 
@@ -109,7 +129,7 @@
 
 /* --- Rejilla de apartamentos --------------------------------------------- */
 
-.rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 22px; }
+.rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(310px, 100%), 1fr)); gap: 22px; }
 
 .apto {
   display: flex; flex-direction: column;
@@ -235,7 +255,7 @@
 
 /* --- Edificios (tarjetas grandes) ---------------------------------------- */
 
-.rejilla-ed { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 22px; }
+.rejilla-ed { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); gap: 22px; }
 .ed-tarjeta { padding: 22px; display: flex; flex-direction: column; gap: 14px; border-radius: var(--r-lg); animation: subir-suave .6s cubic-bezier(.2,.8,.3,1) both; }
 .ed-tarjeta .top { display: flex; gap: 14px; align-items: flex-start; }
 .ed-tarjeta .top .crece h3 { font-size: 1.2rem; }

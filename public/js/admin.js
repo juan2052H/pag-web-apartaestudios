@@ -404,7 +404,7 @@
     const media = a.videoId
       ? `<video src="${urlMedia(a.videoId)}#t=0.6" preload="metadata" muted ${a.portadaId ? `poster="${urlMedia(a.portadaId)}"` : ''}></video>`
       : a.portadaId ? `<img src="${urlMedia(a.portadaId)}" alt="">`
-      : `<div class="vacio-media"><span>🎬</span><span>Sin video</span></div>`;
+      : `<div class="vacio-media"><span aria-hidden="true">🎬</span><span>Sin video</span></div>`;
     return `<article class="u-tarjeta">
       <div class="mini-media">${media}<span class="chip chip-${esc(a.estado)}">${esc(ESTADOS[a.estado])}</span></div>
       <div class="cuerpo">
@@ -412,7 +412,7 @@
         <span class="titulo">${esc(a.titulo || 'Apartaestudio ' + a.numero)}</span>
         <div class="fila-wrap mini tenue">
           <span>N.º ${esc(a.numero)}</span>${a.area ? `<span>· ${esc(numero(a.area))} m²</span>` : ''}
-          ${a.videoId ? '<span>· 🎬 con video</span>' : ''}
+          ${a.videoId ? '<span>· <span aria-hidden="true">🎬</span> con video</span>' : ''}
         </div>
         ${a.estado === 'arrendado' ? `<div class="mini" style="margin-top:8px"><span class="tenue">Inquilino:</span> <strong>${esc(inquilino || 'Sin contrato activo registrado')}</strong></div>` : ''}
         <div style="font-weight:660;font-size:1.05rem;margin-top:auto">${esc(dinero(a.precio))}<span class="tenue mini"> /mes</span></div>
@@ -713,7 +713,7 @@
           const enc = e.encargado || {};
           return `<article class="tarjeta ed-tarjeta">
             <div class="top">
-              ${e.fotoId ? `<img class="foto" src="${urlMedia(e.fotoId)}" alt="">` : ''}
+              ${e.fotoId ? `<img class="foto" src="${urlMedia(e.fotoId)}" alt="Foto de ${esc(e.nombre)}">` : ''}
               <div class="crece">
                 <h3>${esc(e.nombre)}</h3>
                 <div class="tenue mini" style="margin-top:3px">${esc(e.direccion)}${e.ciudad ? ' · ' + esc(e.ciudad) : ''}</div>
@@ -724,12 +724,12 @@
               </div>
             </div>
             ${enc.nombre ? `<div class="encargado">
-              ${enc.fotoId ? `<img class="avatar" src="${urlMedia(enc.fotoId)}" alt="">` : `<div class="avatar">${esc(iniciales(enc.nombre))}</div>`}
+              ${enc.fotoId ? `<img class="avatar" src="${urlMedia(enc.fotoId)}" alt="Foto de ${esc(enc.nombre)}">` : `<div class="avatar">${esc(iniciales(enc.nombre))}</div>`}
               <div class="datos">
                 <div class="rol">${esc(enc.cargo || 'Encargado')}</div>
                 <div class="nombre">${esc(enc.nombre)}</div>
-                ${enc.telefono ? `<div class="linea">☏ ${esc(enc.telefono)}</div>` : ''}
-                ${enc.email ? `<div class="linea">✉ ${esc(enc.email)}</div>` : ''}
+                ${enc.telefono ? `<div class="linea"><span aria-hidden="true">☏</span> ${esc(enc.telefono)}</div>` : ''}
+                ${enc.email ? `<div class="linea"><span aria-hidden="true">✉</span> ${esc(enc.email)}</div>` : ''}
               </div>
             </div>` : '<div class="aviso aviso-ojo">Este edificio todavía no tiene encargado registrado.</div>'}
             <div class="fila" style="gap:8px">
@@ -1134,8 +1134,8 @@
             Permitir acceso al portal del inquilino</label>
           <div class="campo" style="margin-top:14px">
             <label for="pi-clave">${activo ? 'Nueva clave (solo si deseas cambiarla)' : 'Clave de acceso *'}</label>
-            <input id="pi-clave" name="clave" type="password" minlength="6" autocomplete="new-password"
-              placeholder="Mínimo 6 caracteres">
+            <input id="pi-clave" name="clave" type="password" minlength="8" autocomplete="new-password"
+              placeholder="Mínimo 8 caracteres">
             <span class="ayuda">El inquilino entra desde <strong>/inquilino</strong> con su documento y esta clave.</span>
           </div>
         </form>`,
@@ -1146,8 +1146,8 @@
     m.caja.querySelector('[data-guardar]').addEventListener('click', async (ev) => {
       const permitir = m.caja.querySelector('#pi-activo').checked;
       const clave = m.caja.querySelector('#pi-clave').value;
-      if (permitir && !activo && clave.length < 6) {
-        nota('Define una clave de al menos 6 caracteres.', 'error');
+      if (permitir && !activo && clave.length < 8) {
+        nota('Define una clave de al menos 8 caracteres.', 'error');
         return;
       }
       if (permitir && activo && !clave) { m.cerrar(); return; }
@@ -1730,8 +1730,8 @@
             <span class="ayuda">Mínimo 3 caracteres; sin espacios.</span></div>
         </div>
         <div class="campo"><label for="ad-clave">${esNuevo ? 'Contraseña inicial *' : 'Nueva contraseña (opcional)'}</label>
-          <input id="ad-clave" name="clave" type="password" ${esNuevo ? 'required minlength="6"' : 'minlength="6"'} autocomplete="new-password">
-          <span class="ayuda">${esNuevo ? 'Mínimo 6 caracteres. Comunícala de forma segura.' : 'Déjala vacía para conservar la actual.'}</span></div>
+          <input id="ad-clave" name="clave" type="password" ${esNuevo ? 'required minlength="8"' : 'minlength="8"'} autocomplete="new-password">
+          <span class="ayuda">${esNuevo ? 'Mínimo 8 caracteres. Comunícala de forma segura.' : 'Déjala vacía para conservar la actual.'}</span></div>
         <fieldset class="campo" style="border:0;padding:0;margin:0"><legend style="font-size:.84rem;font-weight:620;margin-bottom:8px">Edificios asignados *</legend>
           <div class="pila" style="gap:8px">${E.edificios.map((e) => `<label class="check"><input type="checkbox" name="edificioIds" value="${esc(e.id)}" ${asignados.has(e.id) ? 'checked' : ''}> ${esc(e.nombre)} <span class="mini tenue">· ${esc(e.ciudad || e.direccion || '')}</span></label>`).join('')}</div>
         </fieldset>
@@ -1820,15 +1820,15 @@
             <header><div class="crece"><h3>Seguridad</h3>
               <p class="mini tenue" style="margin:2px 0 0">Credenciales de acceso al panel.</p></div></header>
             <div class="cuerpo">
-              ${E.sesion?.claveInicial ? '<div class="aviso aviso-ojo" style="margin-bottom:14px">Sigues usando la contraseña inicial <strong>admin123</strong>. Cámbiala ahora.</div>' : ''}
+              ${E.sesion?.claveInicial ? '<div class="aviso aviso-ojo" style="margin-bottom:14px">Sigues usando la contraseña inicial generada al crear esta cuenta. Cámbiala ahora.</div>' : ''}
               <form id="f-clave" class="pila" style="gap:14px">
                 <div class="campo"><label for="cl-user">Usuario</label>
                   <input id="cl-user" name="usuario" value="${esc(E.sesion?.usuario || '')}" autocomplete="username"></div>
                 <div class="campo"><label for="cl-act">Contraseña actual</label>
                   <input id="cl-act" name="actual" type="password" required autocomplete="current-password"></div>
                 <div class="campo"><label for="cl-nue">Nueva contraseña</label>
-                  <input id="cl-nue" name="nueva" type="password" required minlength="6" autocomplete="new-password">
-                  <span class="ayuda">Mínimo 6 caracteres.</span></div>
+                  <input id="cl-nue" name="nueva" type="password" required minlength="8" autocomplete="new-password">
+                  <span class="ayuda">Mínimo 8 caracteres.</span></div>
                 <div id="cl-aviso"></div>
                 <button class="btn btn-primario" type="submit">Actualizar credenciales</button>
               </form>

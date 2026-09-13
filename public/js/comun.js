@@ -172,6 +172,25 @@ const App = (() => {
 
   const urlMedia = (mid) => (mid ? `/api/media/${mid}` : '');
 
+  /**
+   * Marcado compartido de "encargado" (avatar + nombre + contacto) usado por
+   * el sitio público en la tarjeta de edificio y en el detalle de unidad.
+   * `accionesHtml` deja cada vista poner sus propios botones (WhatsApp con
+   * mensaje distinto, "Ver unidades" vs "Solicitar visita", etc.).
+   */
+  const tarjetaEncargado = (enc, accionesHtml = '') => `
+    ${enc.fotoId
+      ? `<img class="avatar" src="${urlMedia(enc.fotoId)}" alt="Foto de ${esc(enc.nombre)}">`
+      : `<div class="avatar">${esc(iniciales(enc.nombre))}</div>`}
+    <div class="datos">
+      <div class="rol">${esc(enc.cargo || 'Encargado')}</div>
+      <div class="nombre">${esc(enc.nombre)}</div>
+      ${enc.telefono ? `<div class="linea"><span aria-hidden="true">☏</span> <a href="tel:${esc(enc.telefono.replace(/\s/g, ''))}">${esc(enc.telefono)}</a></div>` : ''}
+      ${enc.email ? `<div class="linea"><span aria-hidden="true">✉</span> <a href="mailto:${esc(enc.email)}">${esc(enc.email)}</a></div>` : ''}
+      ${enc.horario ? `<div class="linea"><span aria-hidden="true">◷</span> <span>${esc(enc.horario)}</span></div>` : ''}
+      ${accionesHtml}
+    </div>`;
+
   /* --- Modales ------------------------------------------------------------ */
 
   const pila = [];
@@ -188,6 +207,21 @@ const App = (() => {
       ${pie ? `<div class="modal-pie">${pie}</div>` : ''}`;
     fondo.append(caja);
 
+    // Mientras haya algún modal abierto, el resto de la página queda inerte
+    // (ni foco ni lectura por teclado/lector de pantalla la alcanzan) para que
+    // el diálogo se comporte como uno modal de verdad.
+    const actualizarInerte = () => {
+      const fondos = new Set($$('.modal-fondo'));
+      for (const hijo of document.body.children) {
+        if (fondos.has(hijo)) hijo.removeAttribute('inert');
+        else if (pila.length) hijo.setAttribute('inert', '');
+        else hijo.removeAttribute('inert');
+      }
+    };
+    const focosDe = () => [...caja.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )].filter((n) => n.offsetParent !== null);
+
     const cerrar = () => {
       if (alCerrar) alCerrar();
       fondo.remove();
@@ -195,8 +229,20 @@ const App = (() => {
       if (i >= 0) pila.splice(i, 1);
       if (!pila.length) document.body.style.overflow = '';
       document.removeEventListener('keydown', porTecla);
+      actualizarInerte();
     };
-    const porTecla = (e) => { if (e.key === 'Escape' && pila[pila.length - 1] === cerrar) cerrar(); };
+    const porTecla = (e) => {
+      if (pila[pila.length - 1] !== cerrar) return;
+      if (e.key === 'Escape') return cerrar();
+      if (e.key === 'Tab') {
+        const focos = focosDe();
+        if (!focos.length) return;
+        const primero = focos[0];
+        const ultimo = focos[focos.length - 1];
+        if (e.shiftKey && document.activeElement === primero) { e.preventDefault(); ultimo.focus(); }
+        else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus(); }
+      }
+    };
 
     caja.querySelector('.cerrar').addEventListener('click', cerrar);
     fondo.addEventListener('mousedown', (e) => { if (e.target === fondo) cerrar(); });
@@ -205,6 +251,7 @@ const App = (() => {
     document.body.append(fondo);
     document.body.style.overflow = 'hidden';
     pila.push(cerrar);
+    actualizarInerte();
 
     if (alAbrir) alAbrir(caja, cerrar);
     // Se enfoca un campo si lo hay; si no, el diálogo mismo. Nunca un botón del
@@ -300,7 +347,15 @@ const App = (() => {
   return {
     configurarMoneda, dinero, numero, porcentaje, mesTexto, fechaTexto, hoyISO, mesISO,
     duracion, pesoArchivo, esc, attr, html, crudo, iniciales,
-    $, $$, el, nota, api, subirArchivo, urlMedia, token,
+    $, $$, el, nota, api, subirArchivo, urlMedia, token, tarjetaEncargado,
     modal, confirmar, iniciarTema, aplicarTema, rebote, ESTADOS, descargarCSV, MESES,
   };
+})();
+
+// El CSS de Leaflet se precarga (rel="preload") para no bloquear el render
+// inicial; aquí se activa como hoja de estilos real en cuanto este script
+// corre (sin onload= inline, que rompería script-src de la CSP).
+(() => {
+  const link = document.getElementById('css-leaflet');
+  if (link) link.rel = 'stylesheet';
 })();

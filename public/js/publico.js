@@ -3,7 +3,7 @@
    ========================================================================== */
 
 (() => {
-  const { $, $$, esc, el, dinero, numero, api, urlMedia, nota, modal, iniciales, ESTADOS } = App;
+  const { $, $$, esc, el, dinero, numero, api, urlMedia, nota, modal, iniciales, ESTADOS, tarjetaEncargado } = App;
 
   let datos = { config: {}, edificios: [], apartamentos: [] };
   let mapa = null;
@@ -16,6 +16,7 @@
 
   async function iniciar() {
     App.iniciarTema($('#btn-tema'));
+    conectarMenuMovil();
     try {
       datos = await api('/api/publico');
     } catch (e) {
@@ -33,12 +34,52 @@
     iniciarMapa();
     conectarFormulario();
 
-    // Enlace profundo: /#apto-<id>
-    const h = location.hash;
-    if (h.startsWith('#apto-')) {
-      const a = datos.apartamentos.find((x) => x.id === h.slice(6));
+    // Enlace profundo: /unidad/<id>-<slug> (URL indexable) o, por
+    // compatibilidad con links ya compartidos antes de este cambio, /#apto-<id>.
+    const idUrl = idUnidadDesdeUrl();
+    if (idUrl) {
+      const a = datos.apartamentos.find((x) => x.id === idUrl);
       if (a) setTimeout(() => abrirDetalle(a), 200);
     }
+  }
+
+  function idUnidadDesdeUrl() {
+    const mPath = /^\/unidad\/([a-f0-9]{18})/i.exec(location.pathname);
+    if (mPath) return mPath[1].toLowerCase();
+    if (location.hash.startsWith('#apto-')) return location.hash.slice(6);
+    return null;
+  }
+
+  function slugificar(t) {
+    return String(t || '')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80);
+  }
+
+  function conectarMenuMovil() {
+    const btn = $('#btn-menu');
+    const panel = $('#nav-enlaces');
+    if (!btn || !panel) return;
+    const cerrar = () => {
+      panel.classList.remove('abierto');
+      btn.setAttribute('aria-expanded', 'false');
+    };
+    const abrir = () => {
+      panel.classList.add('abierto');
+      btn.setAttribute('aria-expanded', 'true');
+    };
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (panel.classList.contains('abierto')) cerrar(); else abrir();
+    });
+    panel.addEventListener('click', (e) => { if (e.target.tagName === 'A') cerrar(); });
+    document.addEventListener('click', (e) => {
+      if (panel.classList.contains('abierto') && !panel.contains(e.target) && e.target !== btn) cerrar();
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrar(); });
   }
 
   function pintarIdentidad() {
@@ -46,10 +87,34 @@
     if (c.nombreSitio) {
       $('#marca-nombre').textContent = c.nombreSitio;
       $('#pie-nombre').textContent = `© ${new Date().getFullYear()} ${c.nombreSitio}`;
-      document.title = `${c.nombreSitio} · Apartaestudios en arriendo`;
+      // Si se entró directo a /unidad/<id>, el servidor ya puso un <title>
+      // propio de esa unidad (mejor para SEO/compartir) — no lo pises aquí.
+      if (!location.pathname.startsWith('/unidad/')) {
+        document.title = `${c.nombreSitio} · apartaestudios con video y ubicación`;
+      }
     }
     if (c.lema) $('#lema-hero').textContent = c.lema;
     $('#pie-contacto').textContent = [c.telefono, c.email].filter(Boolean).join('  ·  ');
+    inyectarDatosOrganizacion(c);
+  }
+
+  // El JSON-LD estático de index.html solo describe el WebSite (no depende de
+  // datos de negocio). Aquí se suma un bloque Organization con los datos
+  // reales de contacto, disponibles solo tras cargar /api/publico.
+  function inyectarDatosOrganizacion(c) {
+    if (!c.nombreSitio) return;
+    const datos = {
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: c.nombreSitio,
+      url: location.origin,
+      ...(c.telefono ? { telephone: c.telefono } : {}),
+      ...(c.email ? { email: c.email } : {}),
+    };
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.textContent = JSON.stringify(datos);
+    document.head.append(script);
   }
 
   function pintarHero() {
@@ -156,6 +221,11 @@
     $$('.apto-media', cont).forEach((n) => {
       const apt = lista.find((a) => a.id === n.dataset.id);
       n.addEventListener('click', () => abrirDetalle(apt));
+      // role="button" en un <div> no dispara "click" con Enter/Espacio de forma
+      // nativa: hay que suplirlo para que la tarjeta sea operable por teclado.
+      n.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirDetalle(apt); }
+      });
       const v = n.querySelector('video');
       if (v) {
         v.addEventListener('loadedmetadata', () => {
@@ -178,13 +248,13 @@
       : a.portadaId
         ? `<img src="${urlMedia(a.portadaId)}" alt="Foto de ${esc(a.titulo || a.numero)}" loading="lazy">
            <div class="play"><i>▦</i></div>`
-        : `<div class="sin-video"><span style="font-size:22px">🎬</span><span>Video en preparación</span></div>`;
+        : `<div class="sin-video"><span style="font-size:22px" aria-hidden="true">🎬</span><span>Video en preparación</span></div>`;
 
     const specs = [
-      a.area ? `<span>◱ ${numero(a.area)} m²</span>` : '',
-      `<span>⌂ ${numero(a.habitaciones)} ${a.habitaciones === 1 ? 'alcoba' : 'alcobas'}</span>`,
-      `<span>⚲ ${numero(a.banos)} ${a.banos === 1 ? 'baño' : 'baños'}</span>`,
-      a.amoblado ? '<span>✦ Amoblado</span>' : '',
+      a.area ? `<span><span aria-hidden="true">◱</span> ${numero(a.area)} m²</span>` : '',
+      `<span><span aria-hidden="true">⌂</span> ${numero(a.habitaciones)} ${a.habitaciones === 1 ? 'alcoba' : 'alcobas'}</span>`,
+      `<span><span aria-hidden="true">⚲</span> ${numero(a.banos)} ${a.banos === 1 ? 'baño' : 'baños'}</span>`,
+      a.amoblado ? '<span><span aria-hidden="true">✦</span> Amoblado</span>' : '',
     ].filter(Boolean).join('');
 
     return `
@@ -237,7 +307,7 @@
               ? `<video src="${urlMedia(a.videoId)}" controls preload="metadata" playsinline
                         ${a.portadaId ? `poster="${urlMedia(a.portadaId)}"` : ''}></video>`
               : `<div class="sin-video" style="position:static;height:100%">
-                   <span style="font-size:26px">🎬</span>
+                   <span style="font-size:26px" aria-hidden="true">🎬</span>
                    <span>Este apartaestudio todavía no tiene video publicado</span>
                  </div>`}
           </div>
@@ -288,24 +358,13 @@
           ${enc.nombre ? `
           <div class="bloque">
             <h4>Encargado del edificio</h4>
-            <div class="encargado">
-              ${enc.fotoId
-                ? `<img class="avatar" src="${urlMedia(enc.fotoId)}" alt="">`
-                : `<div class="avatar">${esc(iniciales(enc.nombre))}</div>`}
-              <div class="datos">
-                <div class="rol">${esc(enc.cargo || 'Encargado')}</div>
-                <div class="nombre">${esc(enc.nombre)}</div>
-                ${enc.telefono ? `<div class="linea">☏ <a href="tel:${esc(enc.telefono.replace(/\s/g, ''))}">${esc(enc.telefono)}</a></div>` : ''}
-                ${enc.email ? `<div class="linea">✉ <a href="mailto:${esc(enc.email)}">${esc(enc.email)}</a></div>` : ''}
-                ${enc.horario ? `<div class="linea">◷ <span>${esc(enc.horario)}</span></div>` : ''}
+            <div class="encargado">${tarjetaEncargado(enc, `
                 <div class="acciones">
                   ${enc.whatsapp ? `<a class="btn btn-sm btn-primario" target="_blank" rel="noopener"
                      href="https://wa.me/${esc(enc.whatsapp)}?text=${encodeURIComponent(
                        `Hola ${enc.nombre}, me interesa el apartaestudio ${a.numero} de ${ed?.nombre || ''}.`)}">WhatsApp</a>` : ''}
                   <button class="btn btn-sm" type="button" data-interes>Solicitar visita</button>
-                </div>
-              </div>
-            </div>
+                </div>`)}</div>
           </div>` : `<div class="bloque"><button class="btn btn-primario btn-bloque" type="button" data-interes>Solicitar visita</button></div>`}
         </aside>
       </div>`;
@@ -314,10 +373,16 @@
       titulo: a.titulo || `Apartaestudio ${a.numero}`,
       tamano: 'lg',
       cuerpo,
-      alCerrar: () => { if (location.hash) history.replaceState(null, '', location.pathname); },
+      alCerrar: () => {
+        if (location.pathname.startsWith('/unidad/')) {
+          history.replaceState(null, '', '/');
+          document.title = `${datos.config.nombreSitio} · apartaestudios con video y ubicación`;
+        }
+      },
     });
 
-    history.replaceState(null, '', '#apto-' + a.id);
+    history.replaceState(null, '', '/unidad/' + a.id + '-' + slugificar(a.titulo || `apartaestudio ${a.numero}`));
+    document.title = `${a.titulo || 'Apartaestudio ' + a.numero}${ed ? ' · ' + ed.nombre : ''} · ${datos.config.nombreSitio}`;
 
     // Mini mapa del edificio
     if (ed?.lat && ed?.lng && window.L) {
@@ -451,7 +516,7 @@
       const disp = us.filter((a) => a.estado === 'disponible').length;
       return `<article class="tarjeta ed-tarjeta">
         <div class="top">
-          ${e.fotoId ? `<img class="foto" src="${urlMedia(e.fotoId)}" alt="" loading="lazy">` : ''}
+          ${e.fotoId ? `<img class="foto" src="${urlMedia(e.fotoId)}" alt="Foto de ${esc(e.nombre)}" loading="lazy">` : ''}
           <div class="crece">
             <h3>${esc(e.nombre)}</h3>
             <div class="tenue mini" style="margin-top:3px">${esc(e.direccion)}${e.ciudad ? ' · ' + esc(e.ciudad) : ''}</div>
@@ -462,22 +527,12 @@
         ${(e.amenidades || []).length
           ? `<div class="etiquetas">${e.amenidades.map((a) => `<span class="etiqueta">${esc(a)}</span>`).join('')}</div>` : ''}
         ${enc.nombre ? `
-        <div class="encargado">
-          ${enc.fotoId ? `<img class="avatar" src="${urlMedia(enc.fotoId)}" alt="">`
-                       : `<div class="avatar">${esc(iniciales(enc.nombre))}</div>`}
-          <div class="datos">
-            <div class="rol">${esc(enc.cargo || 'Encargado')}</div>
-            <div class="nombre">${esc(enc.nombre)}</div>
-            ${enc.telefono ? `<div class="linea">☏ <a href="tel:${esc(enc.telefono.replace(/\s/g, ''))}">${esc(enc.telefono)}</a></div>` : ''}
-            ${enc.email ? `<div class="linea">✉ <a href="mailto:${esc(enc.email)}">${esc(enc.email)}</a></div>` : ''}
-            ${enc.horario ? `<div class="linea">◷ <span>${esc(enc.horario)}</span></div>` : ''}
-            ${enc.whatsapp ? `<div class="acciones">
+        <div class="encargado">${tarjetaEncargado(enc, enc.whatsapp ? `
+            <div class="acciones">
               <a class="btn btn-sm btn-primario" target="_blank" rel="noopener"
                  href="https://wa.me/${esc(enc.whatsapp)}">Escribir por WhatsApp</a>
               <button class="btn btn-sm" type="button" data-ver-ed="${esc(e.id)}">Ver unidades</button>
-            </div>` : ''}
-          </div>
-        </div>` : ''}
+            </div>` : '')}</div>` : ''}
       </article>`;
     }).join('') || '<div class="vacio">Aún no hay edificios registrados.</div>';
 
@@ -503,7 +558,7 @@
 
     $('#contacto-directo').innerHTML = filas.map((f) =>
       `<a class="btn" style="justify-content:flex-start" href="${esc(f.h)}" target="_blank" rel="noopener">
-         <span style="width:18px">${f.i}</span> ${esc(f.t)}</a>`).join('');
+         <span style="width:18px" aria-hidden="true">${f.i}</span> ${esc(f.t)}</a>`).join('');
 
     const disponibles = datos.apartamentos.filter((a) => a.estado === 'disponible');
     $('#c-apto').innerHTML =
@@ -524,6 +579,14 @@
       const fd = Object.fromEntries(new FormData(form).entries());
       if (!fd.nombre?.trim() || !(fd.telefono?.trim() || fd.email?.trim())) {
         aviso.innerHTML = '<div class="aviso aviso-error">Escribe tu nombre y al menos un teléfono o correo.</div>';
+        return;
+      }
+      if (fd.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fd.email.trim())) {
+        aviso.innerHTML = '<div class="aviso aviso-error">Revisa el correo, no parece válido.</div>';
+        return;
+      }
+      if (!fd.consentimiento) {
+        aviso.innerHTML = '<div class="aviso aviso-error">Debes aceptar el tratamiento de datos para continuar.</div>';
         return;
       }
       const btn = form.querySelector('button[type=submit]');
