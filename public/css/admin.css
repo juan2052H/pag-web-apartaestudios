@@ -2,7 +2,7 @@
    Panel de administración
    ========================================================================== */
 
-body.admin { background: var(--plano); }
+body.admin { background: radial-gradient(circle at 90% 0%, color-mix(in srgb, var(--serie-2) 10%, transparent), transparent 26rem), var(--plano); }
 
 /* --- Acceso --------------------------------------------------------------- */
 
@@ -10,12 +10,13 @@ body.admin { background: var(--plano); }
 .acceso-caja {
   width: 100%; max-width: 400px; padding: 32px;
   background: var(--superficie); border: 1px solid var(--linea);
-  border-radius: var(--r-lg); box-shadow: var(--sombra-2);
+  border-radius: var(--r-lg); box-shadow: var(--sombra-2); animation: subir-suave .55s cubic-bezier(.2,.8,.3,1) both;
 }
 .acceso-caja .logo {
   width: 44px; height: 44px; border-radius: 13px; margin-bottom: 18px;
   background: linear-gradient(140deg, var(--acento), var(--serie-3));
   display: grid; place-items: center; color: #fff; font-size: 21px;
+  animation: flotar-suave 3.2s ease-in-out infinite;
 }
 .acceso-caja h1 { font-size: 1.5rem; margin-bottom: 6px; }
 .acceso-caja form { display: flex; flex-direction: column; gap: 14px; margin-top: 22px; }
@@ -25,7 +26,7 @@ body.admin { background: var(--plano); }
 .panel { display: grid; grid-template-columns: 230px 1fr; min-height: 100vh; }
 
 .lateral {
-  background: var(--superficie); border-right: 1px solid var(--linea);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--superficie) 94%, var(--serie-3)), var(--superficie) 28%); border-right: 1px solid var(--linea);
   display: flex; flex-direction: column; gap: 4px; padding: 16px 12px;
   position: sticky; top: 0; height: 100vh; overflow-y: auto;
 }
@@ -44,7 +45,7 @@ body.admin { background: var(--plano); }
   color: var(--ink-2); background: transparent; border: none; cursor: pointer;
 }
 .nav-item:hover { background: var(--superficie-2); color: var(--ink); }
-.nav-item.activo { background: var(--acento-suave); color: var(--acento-ink); font-weight: 620; }
+.nav-item.activo { background: var(--acento-suave); color: var(--acento-ink); font-weight: 620; box-shadow: inset 3px 0 0 var(--acento); }
 .nav-item .ic { width: 18px; text-align: center; flex: none; font-size: 15px; }
 .nav-item .globo {
   margin-left: auto; min-width: 20px; padding: 1px 6px; border-radius: 999px;
@@ -69,7 +70,7 @@ body.admin { background: var(--plano); }
 .sesion-rol + .barra-acciones { margin-left: 0; }
 
 .vista { padding: 24px 26px 60px; display: none; }
-.vista.activa { display: block; }
+.vista.activa { display: block; animation: subir-suave .38s cubic-bezier(.2,.8,.3,1) both; }
 
 .abrir-menu { display: none; }
 
@@ -95,7 +96,9 @@ body.admin { background: var(--plano); }
 .kpi {
   padding: 16px 18px; border-radius: var(--r-md);
   background: var(--superficie); border: 1px solid var(--linea); box-shadow: var(--sombra-1);
+  transition: transform .2s ease, box-shadow .2s ease; animation: subir-suave .45s cubic-bezier(.2,.8,.3,1) both;
 }
+.kpi:hover { transform: translateY(-3px); box-shadow: var(--sombra-2); }
 .kpi .k { font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); font-weight: 640; }
 .kpi .v { font-size: 1.75rem; font-weight: 680; letter-spacing: -.03em; line-height: 1.15; margin-top: 5px; }
 .kpi .n { font-size: .8rem; color: var(--ink-2); margin-top: 3px; display: flex; align-items: center; gap: 5px; }
@@ -170,9 +173,12 @@ body.admin { background: var(--plano); }
 .u-tarjeta {
   border-radius: var(--r-md); overflow: hidden; display: flex; flex-direction: column;
   background: var(--superficie); border: 1px solid var(--linea); box-shadow: var(--sombra-1);
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; animation: subir-suave .45s cubic-bezier(.2,.8,.3,1) both;
 }
+.u-tarjeta:hover { transform: translateY(-4px); box-shadow: var(--sombra-2); border-color: color-mix(in srgb, var(--acento) 40%, var(--linea)); }
 .u-tarjeta .mini-media { aspect-ratio: 16/9; background: var(--superficie-3); position: relative; }
-.u-tarjeta .mini-media video, .u-tarjeta .mini-media img { width: 100%; height: 100%; object-fit: cover; }
+.u-tarjeta .mini-media video, .u-tarjeta .mini-media img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s cubic-bezier(.2,.8,.3,1); }
+.u-tarjeta:hover .mini-media video, .u-tarjeta:hover .mini-media img { transform: scale(1.04); }
 .u-tarjeta .mini-media .vacio-media {
   position: absolute; inset: 0; display: grid; place-items: center; gap: 4px;
   color: var(--ink-3); font-size: .8rem;

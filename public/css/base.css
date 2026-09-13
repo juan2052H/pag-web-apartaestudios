@@ -6,39 +6,39 @@
   color-scheme: light;
 
   /* Superficies e ink */
-  --plano:          #f4f3f0;
-  --superficie:     #fcfcfb;
-  --superficie-2:   #f0efec;
-  --superficie-3:   #e7e6e1;
-  --ink:            #0b0b0b;
-  --ink-2:          #52514e;
-  --ink-3:          #898781;
-  --linea:          #e1e0d9;
-  --linea-fuerte:   #c3c2b7;
+  --plano:          #f6f1ea;
+  --superficie:     #fffdf9;
+  --superficie-2:   #f1e9df;
+  --superficie-3:   #e7dccf;
+  --ink:            #20352d;
+  --ink-2:          #59665e;
+  --ink-3:          #7c887f;
+  --linea:          #e4d9cc;
+  --linea-fuerte:   #cbbcac;
 
   /* Acento */
-  --acento:         #2a78d6;
-  --acento-fuerte:  #1c5cab;
-  --acento-suave:   #e8f1fd;
-  --acento-ink:     #184f95;
+  --acento:         #b95b3f;
+  --acento-fuerte:  #93442e;
+  --acento-suave:   #f8e3da;
+  --acento-ink:     #7e3828;
 
   /* Series de datos (paleta validada) */
-  --serie-1: #2a78d6;
-  --serie-2: #eb6834;
-  --serie-3: #1baf7a;
+  --serie-1: #b95b3f;
+  --serie-2: #d4a44f;
+  --serie-3: #3f8068;
 
   /* Estado */
-  --bien:     #0ca30c;
-  --bien-ink: #006300;
-  --aviso:    #fab219;
-  --aviso-ink:#8a5d00;
-  --serio:    #ec835a;
-  --critico:  #d03b3b;
-  --critico-ink: #a32222;
+  --bien:     #4f9675;
+  --bien-ink: #276449;
+  --aviso:    #d99a36;
+  --aviso-ink:#825814;
+  --serio:    #cf7e52;
+  --critico:  #bd4d4a;
+  --critico-ink: #933632;
 
-  --sombra-1: 0 1px 2px rgba(11,11,11,.05), 0 1px 1px rgba(11,11,11,.04);
-  --sombra-2: 0 4px 16px rgba(11,11,11,.07), 0 1px 3px rgba(11,11,11,.05);
-  --sombra-3: 0 18px 50px rgba(11,11,11,.18), 0 2px 8px rgba(11,11,11,.08);
+  --sombra-1: 0 1px 2px rgba(58,39,25,.05), 0 2px 6px rgba(58,39,25,.035);
+  --sombra-2: 0 10px 26px rgba(58,39,25,.10), 0 2px 6px rgba(58,39,25,.05);
+  --sombra-3: 0 22px 60px rgba(42,30,20,.22), 0 3px 10px rgba(42,30,20,.10);
 
   --r-sm: 8px;
   --r-md: 12px;
@@ -46,31 +46,32 @@
   --r-xl: 26px;
 
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --serif: Iowan Old Style, Baskerville, "Times New Roman", serif;
   --ancho: 1220px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-tema="claro"])) {
     color-scheme: dark;
-    --plano:        #0d0d0d;
-    --superficie:   #1a1a19;
-    --superficie-2: #232322;
-    --superficie-3: #2c2c2a;
-    --ink:          #ffffff;
-    --ink-2:        #c3c2b7;
-    --ink-3:        #898781;
-    --linea:        #2c2c2a;
-    --linea-fuerte: #383835;
-    --acento:       #3987e5;
-    --acento-fuerte:#5598e7;
-    --acento-suave: #16263a;
-    --acento-ink:   #9ec5f4;
-    --serie-1: #3987e5;
-    --serie-2: #d95926;
-    --serie-3: #199e70;
-    --bien-ink: #0ca30c;
-    --aviso-ink:#fab219;
-    --critico-ink: #e66767;
+    --plano:        #18211d;
+    --superficie:   #202d27;
+    --superficie-2: #29372f;
+    --superficie-3: #344238;
+    --ink:          #f9f4eb;
+    --ink-2:        #d1cbc0;
+    --ink-3:        #a59f92;
+    --linea:        #37443c;
+    --linea-fuerte: #4d5b51;
+    --acento:       #df7d5e;
+    --acento-fuerte:#efa082;
+    --acento-suave: #4a3029;
+    --acento-ink:   #ffc0a9;
+    --serie-1: #df7d5e;
+    --serie-2: #e2b75d;
+    --serie-3: #75b391;
+    --bien-ink: #8fcea8;
+    --aviso-ink:#f2c66a;
+    --critico-ink: #f08b86;
     --sombra-1: 0 1px 2px rgba(0,0,0,.4);
     --sombra-2: 0 4px 16px rgba(0,0,0,.45);
     --sombra-3: 0 18px 50px rgba(0,0,0,.6);
@@ -79,25 +80,25 @@
 
 :root[data-tema="oscuro"] {
   color-scheme: dark;
-  --plano:        #0d0d0d;
-  --superficie:   #1a1a19;
-  --superficie-2: #232322;
-  --superficie-3: #2c2c2a;
-  --ink:          #ffffff;
-  --ink-2:        #c3c2b7;
-  --ink-3:        #898781;
-  --linea:        #2c2c2a;
-  --linea-fuerte: #383835;
-  --acento:       #3987e5;
-  --acento-fuerte:#5598e7;
-  --acento-suave: #16263a;
-  --acento-ink:   #9ec5f4;
-  --serie-1: #3987e5;
-  --serie-2: #d95926;
-  --serie-3: #199e70;
-  --bien-ink: #0ca30c;
-  --aviso-ink:#fab219;
-  --critico-ink: #e66767;
+  --plano:        #18211d;
+  --superficie:   #202d27;
+  --superficie-2: #29372f;
+  --superficie-3: #344238;
+  --ink:          #f9f4eb;
+  --ink-2:        #d1cbc0;
+  --ink-3:        #a59f92;
+  --linea:        #37443c;
+  --linea-fuerte: #4d5b51;
+  --acento:       #df7d5e;
+  --acento-fuerte:#efa082;
+  --acento-suave: #4a3029;
+  --acento-ink:   #ffc0a9;
+  --serie-1: #df7d5e;
+  --serie-2: #e2b75d;
+  --serie-3: #75b391;
+  --bien-ink: #8fcea8;
+  --aviso-ink:#f2c66a;
+  --critico-ink: #f08b86;
   --sombra-1: 0 1px 2px rgba(0,0,0,.4);
   --sombra-2: 0 4px 16px rgba(0,0,0,.45);
   --sombra-3: 0 18px 50px rgba(0,0,0,.6);
@@ -115,13 +116,14 @@ body {
   font-size: 15px;
   line-height: 1.55;
   color: var(--ink);
-  background: var(--plano);
+  background: radial-gradient(circle at 90% -10%, color-mix(in srgb, var(--serie-2) 11%, transparent), transparent 26rem), var(--plano);
   -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, h4 { margin: 0; line-height: 1.2; font-weight: 650; letter-spacing: -0.015em; }
-h1 { font-size: clamp(2rem, 5vw, 3.1rem); letter-spacing: -0.03em; }
-h2 { font-size: clamp(1.35rem, 3vw, 1.85rem); letter-spacing: -0.02em; }
+h1, h2 { font-family: var(--serif); font-weight: 600; }
+h1 { font-size: clamp(2rem, 5vw, 3.25rem); letter-spacing: -0.035em; }
+h2 { font-size: clamp(1.45rem, 3vw, 2rem); letter-spacing: -0.025em; }
 h3 { font-size: 1.1rem; }
 p  { margin: 0 0 1em; }
 p:last-child { margin-bottom: 0; }
@@ -168,13 +170,13 @@ img, video { max-width: 100%; display: block; }
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
-  transition: filter .14s ease, transform .08s ease, background-color .14s ease, border-color .14s ease;
+  transition: filter .18s ease, transform .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
 }
-.btn:hover { filter: brightness(.97); }
+.btn:hover { filter: brightness(.98); transform: translateY(-1px); box-shadow: var(--sombra-1); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 
-.btn-primario { --btn-bg: var(--acento); --btn-ink: #fff; --btn-borde: transparent; }
+.btn-primario { --btn-bg: var(--acento); --btn-ink: #fff; --btn-borde: transparent; box-shadow: 0 7px 16px color-mix(in srgb, var(--acento) 24%, transparent); }
 .btn-primario:hover { --btn-bg: var(--acento-fuerte); filter: none; }
 .btn-oscuro { --btn-bg: var(--ink); --btn-ink: var(--plano); --btn-borde: transparent; }
 .btn-fantasma { --btn-bg: transparent; --btn-borde: transparent; color: var(--ink-2); }
@@ -248,7 +250,9 @@ input.control, select.control, textarea.control {
   border: 1px solid var(--linea);
   border-radius: var(--r-md);
   box-shadow: var(--sombra-1);
+  transition: transform .22s cubic-bezier(.2,.8,.3,1), box-shadow .22s ease, border-color .22s ease;
 }
+.tarjeta:hover { transform: translateY(-3px); box-shadow: var(--sombra-2); border-color: var(--linea-fuerte); }
 
 /* --- Avisos --------------------------------------------------------------- */
 
@@ -281,6 +285,15 @@ input.control, select.control, textarea.control {
 .nota-error { background: var(--critico); color: #fff; }
 .nota-bien  { background: var(--bien-ink); color: #fff; }
 @keyframes nota-entra { from { opacity: 0; transform: translateY(8px) scale(.97); } }
+
+/* Movimiento breve y funcional: las animaciones se apagan para quien lo prefiera. */
+@keyframes subir-suave { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulso-suave { 50% { transform: scale(1.06); box-shadow: 0 0 0 7px color-mix(in srgb, var(--bien) 0%, transparent); } }
+@keyframes flotar-suave { 50% { transform: translateY(-3px) rotate(-1deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
 
 /* --- Modal ---------------------------------------------------------------- */
 

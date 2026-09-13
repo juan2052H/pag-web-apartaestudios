@@ -1,17 +1,18 @@
 /* Página pública de acceso a las zonas privadas. */
 
-body.pagina-acceso { min-height: 100vh; background: var(--plano); }
-.acceso-cabecera { border-bottom: 1px solid var(--linea); background: color-mix(in srgb, var(--superficie) 88%, transparent); }
+body.pagina-acceso { min-height: 100vh; background: radial-gradient(circle at 15% 16%, color-mix(in srgb, var(--acento) 12%, transparent), transparent 25rem), var(--plano); }
+.acceso-cabecera { border-bottom: 1px solid var(--linea); background: color-mix(in srgb, var(--superficie) 88%, transparent); backdrop-filter: blur(12px); }
 .acceso-cabecera .contenedor { height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .acceso-marca { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; }
 .acceso-marca span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; color: #fff; background: linear-gradient(140deg, var(--acento), var(--serie-3)); }
 .acceso-principal { max-width: 940px; padding-top: 64px; padding-bottom: 70px; }
-.acceso-intro { max-width: 620px; text-align: center; margin: 0 auto 34px; }
+.acceso-intro { max-width: 620px; text-align: center; margin: 0 auto 34px; animation: subir-suave .65s cubic-bezier(.2,.8,.3,1) both; }
 .acceso-intro h1 { margin: 7px 0 12px; }
 .acceso-intro p { color: var(--ink-2); font-size: 1.04rem; margin: 0; }
 .sobrelinea-acceso { color: var(--acento-ink); font-size: .7rem; letter-spacing: .1em; font-weight: 760; }
 .rejilla-accesos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
-.opcion-acceso { padding: 26px; display: flex; flex-direction: column; align-items: flex-start; }
+.opcion-acceso { padding: 28px; display: flex; flex-direction: column; align-items: flex-start; border-radius: var(--r-lg); animation: subir-suave .65s .06s cubic-bezier(.2,.8,.3,1) both; }
+.opcion-acceso:nth-child(2) { animation: subir-suave .65s .1s cubic-bezier(.2,.8,.3,1) both; }
 .opcion-acceso h2 { font-size: 1.35rem; margin: 7px 0 10px; }
 .opcion-acceso > p { color: var(--ink-2); font-size: .92rem; min-height: 86px; }
 .icono-acceso { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 22px; margin-bottom: 20px; }
@@ -21,7 +22,7 @@ body.pagina-acceso { min-height: 100vh; background: var(--plano); }
 .requisitos-acceso span { display: block; font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 690; color: var(--ink-3); }
 .requisitos-acceso strong { color: var(--ink); font-weight: 610; }
 .opcion-acceso .mini { width: 100%; margin: 11px 0 0; }
-.acceso-seguro { max-width: 700px; margin: 28px auto 0; }
+.acceso-seguro { max-width: 700px; margin: 28px auto 0; animation: subir-suave .65s .2s cubic-bezier(.2,.8,.3,1) both; }
 
 @media (max-width: 640px) {
   .acceso-principal { padding-top: 40px; }
