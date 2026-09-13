@@ -14,6 +14,8 @@
 
 const http = require('http');
 
+require('./lib/entorno').cargarEnv();
+
 const { PUERTO } = require('./lib/config');
 const { cargarDb, obtenerDb } = require('./lib/db');
 const { error } = require('./lib/http');

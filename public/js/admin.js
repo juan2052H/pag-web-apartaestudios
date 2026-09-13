@@ -79,6 +79,63 @@
     }
   });
 
+  $('#a-olvide').addEventListener('click', (ev) => { ev.preventDefault(); abrirRecuperacion(); });
+
+  function abrirRecuperacion() {
+    const m = modal({
+      titulo: 'Recuperar acceso',
+      cuerpo: `
+        <p class="tenue mini">Escribe tu usuario. Si tiene un correo registrado, te enviamos un código para restablecer la contraseña.</p>
+        <form id="f-recuperar-pedir">
+          <div class="campo"><label for="rec-usuario">Usuario</label>
+            <input id="rec-usuario" name="usuario" required autocomplete="username"></div>
+          <div id="rec-aviso"></div>
+          <button class="btn btn-primario btn-bloque" type="submit">Enviar código</button>
+        </form>`,
+    });
+    m.caja.querySelector('#f-recuperar-pedir').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const usuario = ev.target.usuario.value.trim();
+      const btn = ev.target.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = 'Enviando…';
+      try {
+        const d = await api('/api/auth/recuperar', { method: 'POST', body: { usuario } });
+        pasoConfirmarRecuperacion(m, usuario, d.mensaje);
+      } catch (e) {
+        m.caja.querySelector('#rec-aviso').innerHTML = `<div class="aviso aviso-error">${esc(e.message)}</div>`;
+        btn.disabled = false; btn.textContent = 'Enviar código';
+      }
+    });
+  }
+
+  function pasoConfirmarRecuperacion(m, usuario, mensaje) {
+    const cuerpo = m.caja.querySelector('.modal-cuerpo');
+    cuerpo.innerHTML = `
+      <div class="aviso aviso-bien">${esc(mensaje)}</div>
+      <form id="f-recuperar-confirmar" style="margin-top:14px">
+        <div class="campo"><label for="rec-codigo">Código de 6 dígitos</label>
+          <input id="rec-codigo" name="codigo" required inputmode="numeric" maxlength="6" autocomplete="one-time-code"></div>
+        <div class="campo"><label for="rec-nueva">Nueva contraseña</label>
+          <input id="rec-nueva" name="nueva" type="password" required minlength="8" autocomplete="new-password"></div>
+        <div id="rec-aviso2"></div>
+        <button class="btn btn-primario btn-bloque" type="submit">Restablecer contraseña</button>
+      </form>`;
+    cuerpo.querySelector('#f-recuperar-confirmar').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const fd = Object.fromEntries(new FormData(ev.target).entries());
+      const btn = ev.target.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = 'Restableciendo…';
+      try {
+        await api('/api/auth/recuperar-confirmar', { method: 'POST', body: { usuario, ...fd } });
+        nota('Contraseña restablecida. Ya puedes entrar con la nueva.', 'bien');
+        m.cerrar();
+      } catch (e) {
+        cuerpo.querySelector('#rec-aviso2').innerHTML = `<div class="aviso aviso-error">${esc(e.message)}</div>`;
+        btn.disabled = false; btn.textContent = 'Restablecer contraseña';
+      }
+    });
+  }
+
   $('#btn-salir').addEventListener('click', async () => {
     if (!(await confirmar('¿Cerrar la sesión del panel?', { titulo: 'Salir', textoOk: 'Cerrar sesión', peligro: false }))) return;
     try { await api('/api/auth/logout', { method: 'POST' }); } catch {}
@@ -1729,6 +1786,9 @@
             <input id="ad-usuario" name="usuario" required pattern="[A-Za-z0-9._-]{3,40}" maxlength="40" value="${esc(a.usuario || '')}" autocomplete="username">
             <span class="ayuda">Mínimo 3 caracteres; sin espacios.</span></div>
         </div>
+        <div class="campo"><label for="ad-email">Correo</label>
+          <input id="ad-email" name="email" type="email" maxlength="160" value="${esc(a.email || '')}" autocomplete="email">
+          <span class="ayuda">Necesario para que esta cuenta pueda recuperar su propia contraseña.</span></div>
         <div class="campo"><label for="ad-clave">${esNuevo ? 'Contraseña inicial *' : 'Nueva contraseña (opcional)'}</label>
           <input id="ad-clave" name="clave" type="password" ${esNuevo ? 'required minlength="8"' : 'minlength="8"'} autocomplete="new-password">
           <span class="ayuda">${esNuevo ? 'Mínimo 8 caracteres. Comunícala de forma segura.' : 'Déjala vacía para conservar la actual.'}</span></div>
@@ -1824,6 +1884,9 @@
               <form id="f-clave" class="pila" style="gap:14px">
                 <div class="campo"><label for="cl-user">Usuario</label>
                   <input id="cl-user" name="usuario" value="${esc(E.sesion?.usuario || '')}" autocomplete="username"></div>
+                <div class="campo"><label for="cl-email">Correo</label>
+                  <input id="cl-email" name="email" type="email" maxlength="160" value="${esc(E.sesion?.email || '')}" autocomplete="email">
+                  <span class="ayuda">Necesario para poder recuperar tu contraseña si la olvidas.</span></div>
                 <div class="campo"><label for="cl-act">Contraseña actual</label>
                   <input id="cl-act" name="actual" type="password" required autocomplete="current-password"></div>
                 <div class="campo"><label for="cl-nue">Nueva contraseña</label>

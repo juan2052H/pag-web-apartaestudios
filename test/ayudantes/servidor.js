@@ -59,6 +59,21 @@ async function iniciar() {
   const m = /contraseña:\s*(\S+)/.exec(salida);
   const claveInicial = m ? m[1] : null;
 
+  /**
+   * Lee de los logs del servidor el último código de recuperación impreso
+   * para `clave` (ej. "admin:<id>" o "inquilino:<contratoId>"). Solo se
+   * imprime cuando el correo no se pudo enviar de verdad — que es siempre el
+   * caso en pruebas, sin RESEND_API_KEY configurada (ver lib/correo.js).
+   */
+  function codigoPara(clave) {
+    const escapado = clave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const patron = new RegExp(`Código para "${escapado}": (\\d{6})`, 'g');
+    let match;
+    let ultimo = null;
+    while ((match = patron.exec(salida))) ultimo = match[1];
+    return ultimo;
+  }
+
   /** Cliente HTTP mínimo: api('GET', '/api/x', {token, body}) -> {status, body} */
   async function api(metodo, ruta, { token, body, headers } = {}) {
     const r = await fetch(base + ruta, {
@@ -98,7 +113,7 @@ async function iniciar() {
     fs.rmSync(dirDatos, { recursive: true, force: true });
   }
 
-  return { base, api, subir, claveInicial, cerrar, dirDatos };
+  return { base, api, subir, claveInicial, codigoPara, cerrar, dirDatos };
 }
 
 module.exports = { iniciar };

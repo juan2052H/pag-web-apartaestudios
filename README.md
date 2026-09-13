@@ -34,6 +34,29 @@ contratos y su historial de pagos, para que puedas ver todo funcionando de una v
 
 ---
 
+## Recuperar contraseña por correo (opcional)
+
+Tanto el login del panel como el del portal del inquilino tienen un enlace
+"¿Olvidaste tu contraseña?": piden un código de 6 dígitos (vence en 15
+minutos) y permiten poner una clave nueva sin depender de otro administrador.
+Para que el código realmente llegue por correo, copia `.env.example` a `.env`
+y completa:
+
+```
+RESEND_API_KEY=re_xxxxxxxx
+RESEND_FROM=no-reply@tudominio.com
+```
+
+Usa la API de [Resend](https://resend.com) (necesitas verificar un dominio
+propio ahí para poder enviar a cualquier destinatario, no solo a tu propio
+correo de prueba). **Sin `.env` configurado, el código simplemente se
+imprime en la consola del servidor** — la función sigue funcionando en modo
+degradado, útil para desarrollo local. Cada administrador necesita su propio
+correo (Administradores → editar, o Ajustes → Seguridad para el propio); los
+inquilinos ya usan el correo de su contrato.
+
+---
+
 ## Pruebas
 
 ```bash

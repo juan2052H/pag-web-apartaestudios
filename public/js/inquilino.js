@@ -256,6 +256,63 @@
     }
   });
 
+  $('#i-olvide').addEventListener('click', (ev) => { ev.preventDefault(); abrirRecuperacionInquilino(); });
+
+  function abrirRecuperacionInquilino() {
+    const m = modal({
+      titulo: 'Recuperar acceso',
+      cuerpo: `
+        <p class="tenue mini">Escribe tu documento. Si tu contrato tiene un correo registrado, te enviamos un código para restablecer la contraseña.</p>
+        <form id="f-recuperar-inq-pedir">
+          <div class="campo"><label for="reci-documento">Documento</label>
+            <input id="reci-documento" name="documento" required autocomplete="username"></div>
+          <div id="reci-aviso"></div>
+          <button class="btn btn-primario btn-bloque" type="submit">Enviar código</button>
+        </form>`,
+    });
+    m.caja.querySelector('#f-recuperar-inq-pedir').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const documento = ev.target.documento.value.trim();
+      const btn = ev.target.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = 'Enviando…';
+      try {
+        const d = await apiInquilino('/api/inquilino/recuperar', { method: 'POST', body: { documento } });
+        pasoConfirmarRecuperacionInquilino(m, documento, d.mensaje);
+      } catch (e) {
+        m.caja.querySelector('#reci-aviso').innerHTML = `<div class="aviso aviso-error">${esc(e.message)}</div>`;
+        btn.disabled = false; btn.textContent = 'Enviar código';
+      }
+    });
+  }
+
+  function pasoConfirmarRecuperacionInquilino(m, documento, mensaje) {
+    const cuerpo = m.caja.querySelector('.modal-cuerpo');
+    cuerpo.innerHTML = `
+      <div class="aviso aviso-bien">${esc(mensaje)}</div>
+      <form id="f-recuperar-inq-confirmar" style="margin-top:14px">
+        <div class="campo"><label for="reci-codigo">Código de 6 dígitos</label>
+          <input id="reci-codigo" name="codigo" required inputmode="numeric" maxlength="6" autocomplete="one-time-code"></div>
+        <div class="campo"><label for="reci-nueva">Nueva contraseña</label>
+          <input id="reci-nueva" name="nueva" type="password" required minlength="8" autocomplete="new-password"></div>
+        <div id="reci-aviso2"></div>
+        <button class="btn btn-primario btn-bloque" type="submit">Restablecer contraseña</button>
+      </form>`;
+    cuerpo.querySelector('#f-recuperar-inq-confirmar').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const fd = Object.fromEntries(new FormData(ev.target).entries());
+      const btn = ev.target.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = 'Restableciendo…';
+      try {
+        await apiInquilino('/api/inquilino/recuperar-confirmar', { method: 'POST', body: { documento, ...fd } });
+        nota('Contraseña restablecida. Ya puedes entrar con la nueva.', 'bien');
+        m.cerrar();
+      } catch (e) {
+        cuerpo.querySelector('#reci-aviso2').innerHTML = `<div class="aviso aviso-error">${esc(e.message)}</div>`;
+        btn.disabled = false; btn.textContent = 'Restablecer contraseña';
+      }
+    });
+  }
+
   $('#i-salir').addEventListener('click', async () => {
     try { await apiInquilino('/api/inquilino/logout', { method: 'POST' }); } catch {}
     token.set(null);

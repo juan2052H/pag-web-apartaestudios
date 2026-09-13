@@ -5,6 +5,9 @@ datos/
 # Dependencias (el proyecto no usa ninguna, pero por si acaso)
 node_modules/
 
+# Variables de entorno con credenciales (ver .env.example)
+.env
+
 # Sistema
 Thumbs.db
 .DS_Store
