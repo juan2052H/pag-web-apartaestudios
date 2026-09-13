@@ -218,7 +218,7 @@ function dbPorDefecto() {
   });
 
   return {
-    version: 1,
+    version: 2,
     config: {
       nombreSitio: 'Vivo Estudios',
       lema: 'Apartaestudios listos para habitar, con video y ubicación real.',
@@ -227,11 +227,13 @@ function dbPorDefecto() {
       whatsapp: '573000000000',
       moneda: 'COP',
       localeMoneda: 'es-CO',
-      adminUsuario: 'admin',
-      adminSal: sal,
-      adminHash: hash,
-      claveInicial: true,
     },
+    // El propietario conserva el control total. Los demás administradores se
+    // crean desde el panel y solo reciben los edificios que se les asignen.
+    administradores: [{
+      id: id(), nombre: 'Propietario principal', usuario: 'admin', rol: 'principal',
+      edificioIds: [], sal, hash, activo: true, claveInicial: true, creado: ahora(), actualizado: ahora(),
+    }],
     edificios: [
       {
         id: edA,
@@ -296,10 +298,52 @@ async function cargarDb() {
     console.log('  · Base de datos creada con datos de ejemplo.');
   }
   // Normaliza colecciones faltantes
-  for (const k of ['edificios', 'apartamentos', 'contratos', 'pagos', 'solicitudes', 'mensajes', 'media']) {
+  for (const k of ['edificios', 'apartamentos', 'contratos', 'pagos', 'solicitudes', 'mensajes', 'media', 'administradores']) {
     if (!Array.isArray(db[k])) db[k] = [];
   }
   db.config = Object.assign({}, dbPorDefecto().config, db.config || {});
+  let cambio = false;
+
+  // Migración de la cuenta única de versiones anteriores al propietario.
+  if (!db.administradores.length) {
+    const credencial = db.config.adminSal && db.config.adminHash
+      ? { sal: db.config.adminSal, hash: db.config.adminHash }
+      : hashClave('admin123');
+    db.administradores.push({
+      id: id(), nombre: 'Propietario principal', usuario: db.config.adminUsuario || 'admin',
+      rol: 'principal', edificioIds: [], ...credencial, activo: true,
+      claveInicial: !!db.config.claveInicial, creado: ahora(), actualizado: ahora(),
+    });
+    cambio = true;
+  }
+
+  const edificiosValidos = new Set(db.edificios.map((e) => e.id));
+  for (const admin of db.administradores) {
+    if (!admin.id) { admin.id = id(); cambio = true; }
+    if (!admin.nombre) { admin.nombre = admin.rol === 'principal' ? 'Propietario principal' : 'Administrador'; cambio = true; }
+    if (!admin.usuario) { admin.usuario = `admin-${admin.id.slice(0, 6)}`; cambio = true; }
+    if (!admin.sal || !admin.hash) {
+      const credencial = hashClave('admin123');
+      admin.sal = credencial.sal; admin.hash = credencial.hash; admin.claveInicial = true; cambio = true;
+    }
+    if (admin.rol !== 'principal' && admin.rol !== 'edificio') { admin.rol = 'edificio'; cambio = true; }
+    const asignados = [...new Set((Array.isArray(admin.edificioIds) ? admin.edificioIds : []).filter((x) => edificiosValidos.has(x)))];
+    if (JSON.stringify(asignados) !== JSON.stringify(admin.edificioIds || [])) { admin.edificioIds = asignados; cambio = true; }
+    if (admin.activo === undefined) { admin.activo = true; cambio = true; }
+  }
+  if (!db.administradores.some((x) => x.rol === 'principal')) {
+    const credencial = hashClave('admin123');
+    db.administradores.unshift({
+      id: id(), nombre: 'Propietario principal', usuario: 'admin', rol: 'principal', edificioIds: [],
+      ...credencial, activo: true, claveInicial: true, creado: ahora(), actualizado: ahora(),
+    });
+    cambio = true;
+  }
+  // Ya migradas, las credenciales antiguas no permanecen dentro de config.
+  for (const k of ['adminUsuario', 'adminSal', 'adminHash', 'claveInicial']) {
+    if (Object.prototype.hasOwnProperty.call(db.config, k)) { delete db.config[k]; cambio = true; }
+  }
+  if (cambio) await guardarDb();
 }
 
 async function guardarDb() {
@@ -319,12 +363,29 @@ async function guardarDb() {
 // Sesiones en memoria
 // ---------------------------------------------------------------------------
 
-const sesiones = new Map(); // token -> { usuario, expira }
+const sesiones = new Map(); // token -> { administradorId, expira }
 const sesionesInquilino = new Map(); // token -> { contratoId, expira }
 
-function crearSesion(usuario) {
+function perfilAdministrador(admin) {
+  return {
+    id: admin.id, nombre: admin.nombre || admin.usuario, usuario: admin.usuario,
+    rol: admin.rol, edificioIds: admin.rol === 'principal' ? [] : (admin.edificioIds || []),
+    claveInicial: !!admin.claveInicial,
+  };
+}
+
+function vistaAdministrador(admin) {
+  const { sal, hash, ...seguro } = admin;
+  return { ...seguro, edificioIds: admin.rol === 'principal' ? [] : (admin.edificioIds || []) };
+}
+
+function administradorPorId(idAdmin) {
+  return db.administradores.find((x) => x.id === idAdmin);
+}
+
+function crearSesion(admin) {
   const token = crypto.randomBytes(32).toString('hex');
-  sesiones.set(token, { usuario, expira: Date.now() + DURACION_SESION });
+  sesiones.set(token, { administradorId: admin.id, expira: Date.now() + DURACION_SESION });
   return token;
 }
 
@@ -335,8 +396,10 @@ function sesionDe(req) {
   const s = sesiones.get(token);
   if (!s) return null;
   if (s.expira < Date.now()) { sesiones.delete(token); return null; }
+  const admin = administradorPorId(s.administradorId);
+  if (!admin || !admin.activo) { sesiones.delete(token); return null; }
   s.expira = Date.now() + DURACION_SESION;
-  return { token, ...s };
+  return { token, ...perfilAdministrador(admin), expira: s.expira };
 }
 
 function crearSesionInquilino(contratoId) {
@@ -535,13 +598,21 @@ function contratoActivoEn(c, periodo) {
   return true;
 }
 
-function calcularAnalitica(meses = 12) {
+function calcularAnalitica(meses = 12, edificioIds = null) {
   const hoy = mesActual();
   const periodos = periodosEntre(restarMeses(hoy, meses - 1), hoy);
-  const activos = db.contratos.filter((c) => c.estado !== 'cancelado');
+  const idsEdificios = edificioIds ? new Set(edificioIds) : null;
+  const edificios = idsEdificios ? db.edificios.filter((e) => idsEdificios.has(e.id)) : db.edificios;
+  const apartamentos = idsEdificios ? db.apartamentos.filter((a) => idsEdificios.has(a.edificioId)) : db.apartamentos;
+  const idsApartamentos = new Set(apartamentos.map((a) => a.id));
+  const activos = db.contratos.filter((c) => c.estado !== 'cancelado' && idsApartamentos.has(c.apartamentoId));
+  const idsContratos = new Set(activos.map((c) => c.id));
+  const pagos = db.pagos.filter((p) => idsContratos.has(p.contratoId));
+  const solicitudes = db.solicitudes.filter((s) => idsApartamentos.has(s.apartamentoId));
+  const mensajes = db.mensajes.filter((m) => idsContratos.has(m.contratoId));
 
   const pagosPorPeriodo = new Map();
-  for (const p of db.pagos) {
+  for (const p of pagos) {
     const k = p.periodo;
     pagosPorPeriodo.set(k, (pagosPorPeriodo.get(k) || 0) + num(p.monto));
   }
@@ -562,14 +633,14 @@ function calcularAnalitica(meses = 12) {
     let saldo = 0;
     const mesesDebe = [];
     for (const p of periodosEntre(ini, hasta)) {
-      const pagado = db.pagos
+      const pagado = pagos
         .filter((x) => x.contratoId === c.id && x.periodo === p)
         .reduce((s, x) => s + num(x.monto), 0);
       const falta = num(c.canon) - pagado;
       if (falta > 0.5) { saldo += falta; mesesDebe.push(p); }
     }
-    const apt = db.apartamentos.find((a) => a.id === c.apartamentoId);
-    const ed = apt && db.edificios.find((e) => e.id === apt.edificioId);
+    const apt = apartamentos.find((a) => a.id === c.apartamentoId);
+    const ed = apt && edificios.find((e) => e.id === apt.edificioId);
     if (saldo > 0.5) {
       cartera.push({
         contratoId: c.id,
@@ -590,8 +661,8 @@ function calcularAnalitica(meses = 12) {
     .filter((c) => c.estado === 'activo' && c.fin)
     .map((c) => {
       const dias = diasHasta(c.fin);
-      const apt = db.apartamentos.find((a) => a.id === c.apartamentoId);
-      const ed = apt && db.edificios.find((e) => e.id === apt.edificioId);
+      const apt = apartamentos.find((a) => a.id === c.apartamentoId);
+      const ed = apt && edificios.find((e) => e.id === apt.edificioId);
       return {
         contratoId: c.id,
         inquilino: c.inquilino?.nombre || '—',
@@ -604,8 +675,8 @@ function calcularAnalitica(meses = 12) {
     .sort((a, b) => a.dias - b.dias);
 
   // Ocupación por edificio
-  const porEdificio = db.edificios.map((e) => {
-    const us = db.apartamentos.filter((a) => a.edificioId === e.id);
+  const porEdificio = edificios.map((e) => {
+    const us = apartamentos.filter((a) => a.edificioId === e.id);
     const cuenta = { arrendado: 0, disponible: 0, otro: 0 };
     for (const a of us) {
       if (a.estado === 'arrendado') cuenta.arrendado++;
@@ -625,9 +696,9 @@ function calcularAnalitica(meses = 12) {
     };
   });
 
-  const total = db.apartamentos.length;
-  const arrendados = db.apartamentos.filter((a) => a.estado === 'arrendado').length;
-  const disponibles = db.apartamentos.filter((a) => a.estado === 'disponible').length;
+  const total = apartamentos.length;
+  const arrendados = apartamentos.filter((a) => a.estado === 'arrendado').length;
+  const disponibles = apartamentos.filter((a) => a.estado === 'disponible').length;
   const mesCurso = serie[serie.length - 1] || { esperado: 0, recaudado: 0 };
 
   return {
@@ -644,9 +715,9 @@ function calcularAnalitica(meses = 12) {
       pendienteMes: Math.max(0, mesCurso.esperado - mesCurso.recaudado),
       carteraTotal: cartera.reduce((s, c) => s + c.saldo, 0),
       contratosActivos: activos.filter((c) => contratoActivoEn(c, hoy)).length,
-      solicitudesNuevas: db.solicitudes.filter((s) => s.estado === 'nueva').length,
-      mensajesSinLeer: db.mensajes.filter((x) => x.tipo === 'inquilino' && !x.leidoAdmin).length,
-      mantenimientosPendientes: db.mensajes.filter((x) =>
+      solicitudesNuevas: solicitudes.filter((s) => s.estado === 'nueva').length,
+      mensajesSinLeer: mensajes.filter((x) => x.tipo === 'inquilino' && !x.leidoAdmin).length,
+      mantenimientosPendientes: mensajes.filter((x) =>
         x.tipo === 'inquilino' && x.categoria === 'mantenimiento' && x.estadoGestion !== 'resuelta').length,
       contratosPorVencer: vencimientos.filter((x) => x.dias <= 30).length,
       canonPromedio: arrendados
@@ -762,6 +833,107 @@ function sanearPago(b, previo = {}) {
     referencia: texto(b.referencia, 80),
     notas: texto(b.notas, 500),
     creado: previo.creado || ahora(),
+  };
+}
+
+function esPrincipal(sesion) {
+  return sesion?.rol === 'principal';
+}
+
+function puedeGestionarEdificio(sesion, edificioId) {
+  return esPrincipal(sesion) || (sesion?.edificioIds || []).includes(edificioId);
+}
+
+function apartamentoPermitido(sesion, apartamento) {
+  return !!apartamento && puedeGestionarEdificio(sesion, apartamento.edificioId);
+}
+
+function contratoPermitido(sesion, contrato) {
+  const apt = contrato && db.apartamentos.find((a) => a.id === contrato.apartamentoId);
+  return apartamentoPermitido(sesion, apt);
+}
+
+function pagoPermitido(sesion, pago) {
+  const contrato = pago && db.contratos.find((c) => c.id === pago.contratoId);
+  return contratoPermitido(sesion, contrato);
+}
+
+function solicitudPermitida(sesion, solicitud) {
+  const apt = solicitud && db.apartamentos.find((a) => a.id === solicitud.apartamentoId);
+  return apartamentoPermitido(sesion, apt);
+}
+
+function mensajePermitido(sesion, mensaje) {
+  const contrato = mensaje && db.contratos.find((c) => c.id === mensaje.contratoId);
+  return contratoPermitido(sesion, contrato);
+}
+
+function registroPermitido(sesion, seccion, registro) {
+  if (seccion === 'edificios') return !!registro && puedeGestionarEdificio(sesion, registro.id);
+  if (seccion === 'apartamentos') return apartamentoPermitido(sesion, registro);
+  if (seccion === 'contratos') return contratoPermitido(sesion, registro);
+  if (seccion === 'pagos') return pagoPermitido(sesion, registro);
+  return esPrincipal(sesion);
+}
+
+function edificiosQueUsanMedio(mediaId) {
+  const usados = new Set();
+  for (const a of db.apartamentos) {
+    if (a.videoId === mediaId || a.portadaId === mediaId || (a.fotos || []).includes(mediaId)) usados.add(a.edificioId);
+  }
+  for (const e of db.edificios) {
+    if (e.fotoId === mediaId || e.encargado?.fotoId === mediaId) usados.add(e.id);
+  }
+  return usados;
+}
+
+function medioPermitido(sesion, medio) {
+  if (!medio) return false;
+  if (esPrincipal(sesion)) return true;
+  const usos = edificiosQueUsanMedio(medio.id);
+  if ([...usos].some((idEdificio) => puedeGestionarEdificio(sesion, idEdificio))) return true;
+  return usos.size === 0 && medio.creadoPorAdministradorId === sesion.id;
+}
+
+function medioUsadoFueraDeAlcance(sesion, medio) {
+  return !esPrincipal(sesion) && [...edificiosQueUsanMedio(medio.id)]
+    .some((idEdificio) => !puedeGestionarEdificio(sesion, idEdificio));
+}
+
+function mediosPermitidosEnRegistro(sesion, seccion, registro) {
+  const referencias = seccion === 'apartamentos'
+    ? [registro.videoId, registro.portadaId, ...(registro.fotos || [])]
+    : seccion === 'edificios'
+      ? [registro.fotoId, registro.encargado?.fotoId]
+      : [];
+  return referencias.filter(Boolean).every((idMedio) =>
+    medioPermitido(sesion, db.media.find((m) => m.id === idMedio)));
+}
+
+function vistaConfigAdmin() {
+  const { adminUsuario, adminSal, adminHash, claveInicial, ...config } = db.config;
+  return config;
+}
+
+function vistaAdmin(sesion) {
+  const edificios = db.edificios.filter((e) => puedeGestionarEdificio(sesion, e.id));
+  const idsEdificios = new Set(edificios.map((e) => e.id));
+  const apartamentos = db.apartamentos.filter((a) => idsEdificios.has(a.edificioId));
+  const idsApartamentos = new Set(apartamentos.map((a) => a.id));
+  const contratos = db.contratos.filter((c) => idsApartamentos.has(c.apartamentoId));
+  const idsContratos = new Set(contratos.map((c) => c.id));
+  return {
+    config: vistaConfigAdmin(),
+    sesion: perfilAdministrador(sesion),
+    edificios,
+    apartamentos,
+    contratos: contratos.map(vistaContratoAdmin),
+    pagos: db.pagos.filter((p) => idsContratos.has(p.contratoId)),
+    solicitudes: db.solicitudes.filter((s) => idsApartamentos.has(s.apartamentoId)),
+    mensajes: db.mensajes.filter((m) => idsContratos.has(m.contratoId)),
+    media: db.media.filter((m) => medioPermitido(sesion, m)).map((m) => ({ ...m, url: `/api/media/${m.id}` })),
+    analitica: calcularAnalitica(12, esPrincipal(sesion) ? null : sesion.edificioIds),
+    administradores: esPrincipal(sesion) ? db.administradores.map(vistaAdministrador) : [],
   };
 }
 
@@ -982,19 +1154,19 @@ async function manejarApi(req, res, url) {
   if (seccion === 'auth') {
     if (recurso === 'login' && m === 'POST') {
       const b = await leerJson(req);
-      const usuarioOk = texto(b.usuario).toLowerCase() === String(db.config.adminUsuario).toLowerCase();
-      const claveOk = verificarClave(b.clave || '', db.config.adminSal, db.config.adminHash);
+      const usuario = texto(b.usuario, 40).trim().toLowerCase();
+      const admin = db.administradores.find((x) => x.activo && String(x.usuario).toLowerCase() === usuario);
+      const claveOk = admin && verificarClave(b.clave || '', admin.sal, admin.hash);
       await new Promise((r) => setTimeout(r, 250)); // freno básico contra fuerza bruta
-      if (!usuarioOk || !claveOk) return error(res, 401, 'Usuario o contraseña incorrectos.');
+      if (!admin || !claveOk) return error(res, 401, 'Usuario o contraseña incorrectos.');
       return ok(res, {
-        token: crearSesion(db.config.adminUsuario),
-        usuario: db.config.adminUsuario,
-        claveInicial: !!db.config.claveInicial,
+        token: crearSesion(admin),
+        ...perfilAdministrador(admin),
       });
     }
     const s = sesionDe(req);
     if (recurso === 'sesion' && m === 'GET') {
-      return s ? ok(res, { usuario: s.usuario, claveInicial: !!db.config.claveInicial }) : error(res, 401, 'Sesión expirada');
+      return s ? ok(res, perfilAdministrador(s)) : error(res, 401, 'Sesión expirada');
     }
     if (recurso === 'logout' && m === 'POST') {
       if (s) sesiones.delete(s.token);
@@ -1003,15 +1175,25 @@ async function manejarApi(req, res, url) {
     if (recurso === 'clave' && m === 'POST') {
       if (!s) return error(res, 401, 'No autorizado');
       const b = await leerJson(req);
-      if (!verificarClave(b.actual || '', db.config.adminSal, db.config.adminHash)) {
+      const admin = administradorPorId(s.id);
+      if (!admin || !verificarClave(b.actual || '', admin.sal, admin.hash)) {
         return error(res, 400, 'La contraseña actual no coincide.');
       }
       if (String(b.nueva || '').length < 6) return error(res, 400, 'La nueva contraseña debe tener al menos 6 caracteres.');
+      const usuario = texto(b.usuario, 40).trim();
+      if (!usuario) return error(res, 400, 'Indica un nombre de usuario.');
+      if (!/^[a-zA-Z0-9._-]{3,40}$/.test(usuario)) {
+        return error(res, 400, 'El usuario debe tener al menos 3 caracteres y no incluir espacios.');
+      }
+      if (db.administradores.some((x) => x.id !== admin.id && String(x.usuario).toLowerCase() === usuario.toLowerCase())) {
+        return error(res, 400, 'Ese nombre de usuario ya está en uso.');
+      }
       const nuevo = hashClave(b.nueva);
-      db.config.adminSal = nuevo.sal;
-      db.config.adminHash = nuevo.hash;
-      db.config.claveInicial = false;
-      if (texto(b.usuario)) db.config.adminUsuario = texto(b.usuario, 40);
+      admin.sal = nuevo.sal;
+      admin.hash = nuevo.hash;
+      admin.claveInicial = false;
+      admin.usuario = usuario;
+      admin.actualizado = ahora();
       await guardarDb();
       return ok(res);
     }
@@ -1021,6 +1203,81 @@ async function manejarApi(req, res, url) {
   // ---- A partir de aquí, todo exige sesión --------------------------------
   const sesion = sesionDe(req);
   if (!sesion) return error(res, 401, 'No autorizado');
+  const prohibido = () => error(res, 403, 'No tienes permiso para gestionar este recurso.');
+
+  // Solo el propietario puede crear y asignar administradores de edificio.
+  if (seccion === 'administradores') {
+    if (!esPrincipal(sesion)) return prohibido();
+    if (m === 'GET') return ok(res, db.administradores.map(vistaAdministrador));
+
+    if (m === 'POST' && !recurso) {
+      const b = await leerJson(req);
+      const nombre = texto(b.nombre, 120).trim();
+      const usuario = texto(b.usuario, 40).trim();
+      const clave = String(b.clave || '');
+      const edificioIds = [...new Set(Array.isArray(b.edificioIds) ? b.edificioIds.map((x) => texto(x, 40)) : [])];
+      if (!nombre || !usuario || !/^[a-zA-Z0-9._-]{3,40}$/.test(usuario)) {
+        return error(res, 400, 'Indica nombre y un usuario de al menos 3 caracteres, sin espacios.');
+      }
+      if (clave.length < 6) return error(res, 400, 'La clave debe tener al menos 6 caracteres.');
+      if (!edificioIds.length || edificioIds.some((x) => !db.edificios.some((e) => e.id === x))) {
+        return error(res, 400, 'Asigna al menos un edificio válido.');
+      }
+      if (db.administradores.some((x) => String(x.usuario).toLowerCase() === usuario.toLowerCase())) {
+        return error(res, 400, 'Ese nombre de usuario ya está en uso.');
+      }
+      const credencial = hashClave(clave);
+      const nuevo = {
+        id: id(), nombre, usuario, rol: 'edificio', edificioIds,
+        ...credencial, activo: true, claveInicial: false, creado: ahora(), actualizado: ahora(),
+      };
+      db.administradores.push(nuevo);
+      await guardarDb();
+      return json(res, 201, vistaAdministrador(nuevo));
+    }
+
+    const admin = db.administradores.find((x) => x.id === recurso);
+    if (!admin) return error(res, 404, 'Administrador no encontrado.');
+    if (admin.rol === 'principal') return error(res, 400, 'La cuenta del propietario se administra desde Seguridad.');
+
+    if (m === 'PUT') {
+      const b = await leerJson(req);
+      const nombre = texto(b.nombre, 120).trim();
+      const usuario = texto(b.usuario, 40).trim();
+      const edificioIds = [...new Set(Array.isArray(b.edificioIds) ? b.edificioIds.map((x) => texto(x, 40)) : [])];
+      if (!nombre || !usuario || !/^[a-zA-Z0-9._-]{3,40}$/.test(usuario)) {
+        return error(res, 400, 'Indica nombre y un usuario de al menos 3 caracteres, sin espacios.');
+      }
+      if (!edificioIds.length || edificioIds.some((x) => !db.edificios.some((e) => e.id === x))) {
+        return error(res, 400, 'Asigna al menos un edificio válido.');
+      }
+      if (db.administradores.some((x) => x.id !== admin.id && String(x.usuario).toLowerCase() === usuario.toLowerCase())) {
+        return error(res, 400, 'Ese nombre de usuario ya está en uso.');
+      }
+      if (b.clave && String(b.clave).length < 6) return error(res, 400, 'La clave debe tener al menos 6 caracteres.');
+      admin.nombre = nombre;
+      admin.usuario = usuario;
+      admin.edificioIds = edificioIds;
+      admin.activo = b.activo !== false;
+      if (b.clave) {
+        const credencial = hashClave(b.clave);
+        admin.sal = credencial.sal;
+        admin.hash = credencial.hash;
+      }
+      admin.actualizado = ahora();
+      await guardarDb();
+      return ok(res, vistaAdministrador(admin));
+    }
+
+    if (m === 'DELETE') {
+      db.administradores = db.administradores.filter((x) => x.id !== admin.id);
+      for (const [token, datosSesion] of sesiones) {
+        if (datosSesion.administradorId === admin.id) sesiones.delete(token);
+      }
+      await guardarDb();
+      return ok(res);
+    }
+  }
 
   // Subida de archivos: el cuerpo crudo es el archivo.
   if (seccion === 'media' && m === 'POST') {
@@ -1035,7 +1292,10 @@ async function manejarApi(req, res, url) {
     const archivo = mid + ext;
     try {
       const tam = await recibirArchivo(req, res, path.join(DIR_SUBIDAS, archivo));
-      const reg = { id: mid, archivo, nombre: texto(nombre, 200), mime, tipo, tamano: tam, creado: ahora() };
+      const reg = {
+        id: mid, archivo, nombre: texto(nombre, 200), mime, tipo, tamano: tam,
+        creadoPorAdministradorId: sesion.id, creado: ahora(),
+      };
       db.media.unshift(reg);
       await guardarDb();
       return json(res, 201, { ok: true, ...reg, url: `/api/media/${mid}` });
@@ -1045,12 +1305,13 @@ async function manejarApi(req, res, url) {
   }
 
   if (seccion === 'media' && m === 'GET' && !recurso) {
-    return ok(res, db.media.map((x) => ({ ...x, url: `/api/media/${x.id}` })));
+    return ok(res, db.media.filter((x) => medioPermitido(sesion, x)).map((x) => ({ ...x, url: `/api/media/${x.id}` })));
   }
 
   if (seccion === 'media' && m === 'DELETE' && recurso) {
     const i = db.media.findIndex((x) => x.id === recurso);
     if (i < 0) return error(res, 404, 'No existe');
+    if (!medioPermitido(sesion, db.media[i]) || medioUsadoFueraDeAlcance(sesion, db.media[i])) return prohibido();
     const [reg] = db.media.splice(i, 1);
     for (const a of db.apartamentos) {
       if (a.videoId === reg.id) a.videoId = null;
@@ -1068,42 +1329,37 @@ async function manejarApi(req, res, url) {
 
   // Analítica
   if (seccion === 'analitica' && m === 'GET') {
-    return ok(res, calcularAnalitica(Math.min(24, Math.max(3, num(url.searchParams.get('meses'), 12)))));
+    return ok(res, calcularAnalitica(
+      Math.min(24, Math.max(3, num(url.searchParams.get('meses'), 12))),
+      esPrincipal(sesion) ? null : sesion.edificioIds,
+    ));
   }
 
   // Todo el estado administrativo de una
   if (seccion === 'admin' && m === 'GET') {
-    return ok(res, {
-      config: { ...db.config, adminSal: undefined, adminHash: undefined },
-      edificios: db.edificios,
-      apartamentos: db.apartamentos,
-      contratos: db.contratos.map(vistaContratoAdmin),
-      pagos: db.pagos,
-      solicitudes: db.solicitudes,
-      mensajes: db.mensajes,
-      media: db.media.map((x) => ({ ...x, url: `/api/media/${x.id}` })),
-      analitica: calcularAnalitica(12),
-    });
+    return ok(res, vistaAdmin(sesion));
   }
 
   // Configuración del sitio
   if (seccion === 'config' && m === 'PUT') {
+    if (!esPrincipal(sesion)) return prohibido();
     const b = await leerJson(req);
     for (const k of ['nombreSitio', 'lema', 'telefono', 'email', 'moneda', 'localeMoneda']) {
       if (b[k] !== undefined) db.config[k] = texto(b[k], 200);
     }
     if (b.whatsapp !== undefined) db.config.whatsapp = texto(b.whatsapp, 40).replace(/\D/g, '');
     await guardarDb();
-    return ok(res, { config: { ...db.config, adminSal: undefined, adminHash: undefined } });
+    return ok(res, { config: vistaConfigAdmin() });
   }
 
   // Solicitudes (gestión)
   if (seccion === 'solicitudes') {
-    if (m === 'GET') return ok(res, db.solicitudes);
+    if (m === 'GET') return ok(res, db.solicitudes.filter((s) => solicitudPermitida(sesion, s)));
     if (m === 'PUT' && recurso) {
       const b = await leerJson(req);
       const s = db.solicitudes.find((x) => x.id === recurso);
       if (!s) return error(res, 404, 'No existe');
+      if (!solicitudPermitida(sesion, s)) return prohibido();
       if (['nueva', 'contactada', 'visita', 'cerrada', 'descartada'].includes(b.estado)) s.estado = b.estado;
       if (b.notas !== undefined) s.notas = texto(b.notas, 1000);
       await guardarDb();
@@ -1112,6 +1368,7 @@ async function manejarApi(req, res, url) {
     if (m === 'DELETE' && recurso) {
       const i = db.solicitudes.findIndex((x) => x.id === recurso);
       if (i < 0) return error(res, 404, 'No existe');
+      if (!solicitudPermitida(sesion, db.solicitudes[i])) return prohibido();
       db.solicitudes.splice(i, 1);
       await guardarDb();
       return ok(res);
@@ -1122,6 +1379,7 @@ async function manejarApi(req, res, url) {
   if (seccion === 'contratos' && recurso && partes[3] === 'portal' && m === 'POST') {
     const c = db.contratos.find((x) => x.id === recurso);
     if (!c) return error(res, 404, 'Contrato no encontrado');
+    if (!contratoPermitido(sesion, c)) return prohibido();
     const b = await leerJson(req);
     if (b.activo === false) {
       c.portal = { activo: false, sal: '', hash: '', actualizado: ahora() };
@@ -1140,7 +1398,7 @@ async function manejarApi(req, res, url) {
   // Mensajes entre administración e inquilinos. El tipo se decide en el
   // servidor para impedir que un cliente suplante al administrador.
   if (seccion === 'mensajes') {
-    if (m === 'GET') return ok(res, db.mensajes);
+    if (m === 'GET') return ok(res, db.mensajes.filter((x) => mensajePermitido(sesion, x)));
     if (m === 'POST' && !recurso) {
       const b = await leerJson(req);
       const cuerpo = texto(b.cuerpo, 1500).trim();
@@ -1150,9 +1408,11 @@ async function manejarApi(req, res, url) {
       let destinos = [];
       if (contratoId) {
         const c = db.contratos.find((x) => x.id === contratoId);
+        if (c && !contratoPermitido(sesion, c)) return prohibido();
         if (c && c.estado === 'activo' && contratoActivoEn(c, mesActual())) destinos = [c];
       } else if (edificioId) {
         if (!db.edificios.some((e) => e.id === edificioId)) return error(res, 400, 'Selecciona un edificio válido.');
+        if (!puedeGestionarEdificio(sesion, edificioId)) return prohibido();
         destinos = db.contratos.filter((c) => {
           const apt = db.apartamentos.find((a) => a.id === c.apartamentoId);
           return c.estado === 'activo' && contratoActivoEn(c, mesActual()) && apt?.edificioId === edificioId;
@@ -1175,6 +1435,7 @@ async function manejarApi(req, res, url) {
     if (m === 'PUT' && recurso && partes[3] === 'leido') {
       const msg = db.mensajes.find((x) => x.id === recurso);
       if (!msg) return error(res, 404, 'Mensaje no encontrado');
+      if (!mensajePermitido(sesion, msg)) return prohibido();
       if (msg.tipo === 'inquilino') {
         msg.leidoAdmin = true;
         msg.leidoAdminEn = ahora();
@@ -1185,6 +1446,7 @@ async function manejarApi(req, res, url) {
     if (m === 'PUT' && recurso && partes[3] === 'gestion') {
       const msg = db.mensajes.find((x) => x.id === recurso);
       if (!msg) return error(res, 404, 'Mensaje no encontrado');
+      if (!mensajePermitido(sesion, msg)) return prohibido();
       if (msg.tipo !== 'inquilino' || msg.categoria !== 'mantenimiento') {
         return error(res, 400, 'Solo las solicitudes de mantenimiento tienen estado de gestión.');
       }
@@ -1200,6 +1462,7 @@ async function manejarApi(req, res, url) {
     if (m === 'DELETE' && recurso) {
       const i = db.mensajes.findIndex((x) => x.id === recurso);
       if (i < 0) return error(res, 404, 'Mensaje no encontrado');
+      if (!mensajePermitido(sesion, db.mensajes[i])) return prohibido();
       db.mensajes.splice(i, 1);
       await guardarDb();
       return ok(res);
@@ -1210,11 +1473,17 @@ async function manejarApi(req, res, url) {
   const col = coleccion[seccion];
   if (col) {
     const arr = col.arr();
-    if (m === 'GET') return ok(res, seccion === 'contratos' ? arr.map(vistaContratoAdmin) : arr);
+    if (m === 'GET') {
+      const visibles = arr.filter((x) => registroPermitido(sesion, seccion, x));
+      return ok(res, seccion === 'contratos' ? visibles.map(vistaContratoAdmin) : visibles);
+    }
 
     if (m === 'POST' && !recurso) {
+      if (seccion === 'edificios' && !esPrincipal(sesion)) return prohibido();
       const b = await leerJson(req);
       const nuevo = col.sanear(b);
+      if (!registroPermitido(sesion, seccion, nuevo)) return prohibido();
+      if (!mediosPermitidosEnRegistro(sesion, seccion, nuevo)) return prohibido();
       const problemaContrato = seccion === 'contratos' ? validarContrato(nuevo) : '';
       if (problemaContrato) return error(res, 400, problemaContrato);
       arr.push(nuevo);
@@ -1226,8 +1495,11 @@ async function manejarApi(req, res, url) {
     if (m === 'PUT' && recurso) {
       const i = arr.findIndex((x) => x.id === recurso);
       if (i < 0) return error(res, 404, 'No existe');
+      if (!registroPermitido(sesion, seccion, arr[i])) return prohibido();
       const b = await leerJson(req);
       const actualizado = col.sanear({ ...arr[i], ...b }, arr[i]);
+      if (!registroPermitido(sesion, seccion, actualizado)) return prohibido();
+      if (!mediosPermitidosEnRegistro(sesion, seccion, actualizado)) return prohibido();
       const problemaContrato = seccion === 'contratos' ? validarContrato(actualizado, arr[i].id) : '';
       if (problemaContrato) return error(res, 400, problemaContrato);
       arr[i] = actualizado;
@@ -1239,6 +1511,8 @@ async function manejarApi(req, res, url) {
     if (m === 'DELETE' && recurso) {
       const i = arr.findIndex((x) => x.id === recurso);
       if (i < 0) return error(res, 404, 'No existe');
+      if (!registroPermitido(sesion, seccion, arr[i])) return prohibido();
+      if (seccion === 'edificios' && !esPrincipal(sesion)) return prohibido();
       const [borrado] = arr.splice(i, 1);
       // Limpieza en cascada
       if (seccion === 'edificios') {
@@ -1248,6 +1522,9 @@ async function manejarApi(req, res, url) {
         db.contratos = db.contratos.filter((c) => !aptIds.includes(c.apartamentoId));
         db.pagos = db.pagos.filter((p) => !ctIds.includes(p.contratoId));
         db.mensajes = db.mensajes.filter((x) => !ctIds.includes(x.contratoId));
+        for (const admin of db.administradores) {
+          admin.edificioIds = (admin.edificioIds || []).filter((idEdificio) => idEdificio !== borrado.id);
+        }
       }
       if (seccion === 'apartamentos') {
         const ctIds = db.contratos.filter((c) => c.apartamentoId === borrado.id).map((c) => c.id);
@@ -1326,9 +1603,10 @@ cargarDb().then(() => {
     console.log('');
     console.log(`  Sitio público : http://localhost:${PUERTO}/`);
     console.log(`  Panel admin   : http://localhost:${PUERTO}/admin`);
-    if (db.config.claveInicial) {
+    const propietario = db.administradores.find((x) => x.rol === 'principal');
+    if (propietario?.claveInicial) {
       console.log('');
-      console.log('  Usuario: admin   Contraseña: admin123');
+      console.log(`  Usuario: ${propietario.usuario}   Contraseña: admin123`);
       console.log('  (cámbiala desde Ajustes en el panel)');
     }
     console.log('');

@@ -13,6 +13,7 @@
   let E = {
     config: {}, edificios: [], apartamentos: [], contratos: [],
     pagos: [], solicitudes: [], mensajes: [], media: [], analitica: null,
+    sesion: null, administradores: [],
   };
   let vistaActual = 'resumen';
 
@@ -22,6 +23,7 @@
   const contratoActivoDeApartamento = (apartamentoId) => E.contratos.find((x) =>
     x.apartamentoId === apartamentoId && x.estado === 'activo');
   const medio = (idv) => E.media.find((x) => x.id === idv);
+  const esPrincipal = () => E.sesion?.rol === 'principal';
 
   const nombreUnidad = (a) => {
     if (!a) return '— unidad eliminada —';
@@ -100,6 +102,12 @@
       E = await api('/api/admin');
       App.configurarMoneda(E.config.moneda, E.config.localeMoneda);
       $('#lat-nombre').textContent = E.config.nombreSitio || 'Apartaestudios';
+      const perfil = E.sesion || {};
+      const etiquetaRol = esPrincipal() ? 'Propietario principal' : 'Administrador de edificio';
+      const rol = $('#sesion-rol');
+      rol.hidden = false;
+      rol.textContent = `${etiquetaRol} · ${perfil.nombre || perfil.usuario || ''}`;
+      $$('[data-solo-principal]').forEach((n) => { n.hidden = !esPrincipal(); });
       const nuevas = E.solicitudes.filter((s) => s.estado === 'nueva').length;
       const g = $('#globo-solicitudes');
       g.hidden = !nuevas;
@@ -144,11 +152,13 @@
     mensajes:    { titulo: 'Mensajes', sub: 'Comunicación privada con inquilinos' },
     solicitudes: { titulo: 'Solicitudes', sub: 'Interesados que llegaron por el sitio' },
     medios:      { titulo: 'Multimedia', sub: 'Videos y fotos subidos' },
+    administradores: { titulo: 'Administradores', sub: 'Accesos y edificios asignados' },
     ajustes:     { titulo: 'Ajustes', sub: 'Datos del sitio y seguridad' },
   };
 
   function irA(v) {
     if (!VISTAS[v]) v = 'resumen';
+    if (v === 'administradores' && !esPrincipal()) v = 'resumen';
     vistaActual = v;
     history.replaceState(null, '', '#' + v);
     $$('.nav-item[data-vista]').forEach((b) => b.classList.toggle('activo', b.dataset.vista === v));
@@ -168,7 +178,8 @@
     ({
       resumen: verResumen, unidades: verUnidades, edificios: verEdificios,
       contratos: verContratos, pagos: verPagos, cartera: verCartera,
-      mensajes: verMensajes, solicitudes: verSolicitudes, medios: verMedios, ajustes: verAjustes,
+      mensajes: verMensajes, solicitudes: verSolicitudes, medios: verMedios,
+      administradores: verAdministradores, ajustes: verAjustes,
     })[v]();
   }
 
@@ -691,7 +702,7 @@
   /* =============================================================== Edificios */
 
   function verEdificios() {
-    accion('Nuevo edificio', () => formEdificio());
+    if (esPrincipal()) accion('Nuevo edificio', () => formEdificio());
 
     $('#v-edificios').innerHTML = E.edificios.length
       ? `<div class="rejilla-ed">${E.edificios.map((e) => {
@@ -722,7 +733,7 @@
             <div class="fila" style="gap:8px">
               <button class="btn btn-sm crece" type="button" data-editar="${esc(e.id)}">Editar</button>
               <button class="btn btn-sm crece" type="button" data-unidades="${esc(e.id)}">Ver unidades</button>
-              <button class="btn btn-sm btn-peligro" type="button" data-borrar="${esc(e.id)}">Eliminar</button>
+              ${esPrincipal() ? `<button class="btn btn-sm btn-peligro" type="button" data-borrar="${esc(e.id)}">Eliminar</button>` : ''}
             </div>
           </article>`;
         }).join('')}</div>`
@@ -1580,12 +1591,103 @@
     }));
   }
 
+  /* ========================================================= Administradores */
+
+  function verAdministradores() {
+    if (!esPrincipal()) return irA('resumen');
+    accion('Nuevo administrador', () => formAdministrador());
+    const administradores = E.administradores || [];
+    const nombreEdificios = (ids) => (ids || []).map((idEdificio) => edificio(idEdificio)?.nombre).filter(Boolean);
+
+    $('#v-administradores').innerHTML = `
+      <div class="bloque-panel" style="margin-bottom:18px"><div class="cuerpo">
+        <strong>Control de accesos</strong>
+        <p class="mini tenue" style="margin:5px 0 0">El propietario principal ve todos los edificios. Cada administrador de edificio solo puede consultar y gestionar las unidades, contratos, pagos, mensajes y solicitudes de los edificios asignados.</p>
+      </div></div>
+      ${administradores.length ? `<div class="bloque-panel"><ul class="lista-simple">${administradores.map((a) => {
+        const esDueno = a.rol === 'principal';
+        const asignados = nombreEdificios(a.edificioIds);
+        return `<li>
+          <div class="crece">
+            <div class="fila-wrap" style="gap:8px"><strong>${esc(a.nombre || a.usuario)}</strong>
+              <span class="chip ${esDueno ? 'chip-arrendado' : a.activo ? 'chip-disponible' : 'chip-mantenimiento'}">${esc(esDueno ? 'Propietario principal' : a.activo ? 'Administrador de edificio' : 'Acceso pausado')}</span>
+            </div>
+            <div class="mini tenue" style="margin-top:4px">Usuario: ${esc(a.usuario)}</div>
+            <div class="mini" style="margin-top:5px">${esDueno ? 'Acceso total a todos los edificios.' : `Edificios: <strong>${esc(asignados.join(' · ') || 'Sin asignación')}</strong>`}</div>
+          </div>
+          ${esDueno ? '<span class="mini tenue">Se administra desde Ajustes → Seguridad.</span>' : `<div class="fila" style="gap:6px">
+            <button class="btn btn-sm" type="button" data-editar-admin="${esc(a.id)}">Editar</button>
+            <button class="btn btn-sm btn-peligro" type="button" data-borrar-admin="${esc(a.id)}">Eliminar</button>
+          </div>`}
+        </li>`;
+      }).join('')}</ul></div>` : '<div class="vacio"><h3>Sin administradores registrados</h3></div>'}`;
+
+    $$('#v-administradores [data-editar-admin]').forEach((b) =>
+      b.addEventListener('click', () => formAdministrador((E.administradores || []).find((a) => a.id === b.dataset.editarAdmin))));
+    $$('#v-administradores [data-borrar-admin]').forEach((b) => b.addEventListener('click', async () => {
+      const a = (E.administradores || []).find((x) => x.id === b.dataset.borrarAdmin);
+      if (!a || !(await confirmar(`Se eliminará el acceso de ${a.nombre || a.usuario}. Esta persona ya no podrá entrar al panel.`,
+        { titulo: 'Eliminar administrador', textoOk: 'Eliminar' }))) return;
+      await operar(() => api('/api/administradores/' + a.id, { method: 'DELETE' }), 'Administrador eliminado');
+    }));
+  }
+
+  function formAdministrador(a = null) {
+    if (!esPrincipal()) return;
+    const esNuevo = !a;
+    a = a || { nombre: '', usuario: '', edificioIds: [], activo: true };
+    if (!E.edificios.length) {
+      nota('Crea un edificio antes de asignar un administrador.', 'error');
+      return irA('edificios');
+    }
+    const asignados = new Set(a.edificioIds || []);
+    const m = modal({
+      titulo: esNuevo ? 'Nuevo administrador de edificio' : `Editar acceso · ${a.nombre || a.usuario}`,
+      tamano: 'md',
+      cuerpo: `<form id="f-administrador" class="pila" style="gap:14px">
+        <div class="rejilla-campos">
+          <div class="campo"><label for="ad-nombre">Nombre completo *</label>
+            <input id="ad-nombre" name="nombre" required maxlength="120" value="${esc(a.nombre || '')}" autocomplete="name"></div>
+          <div class="campo"><label for="ad-usuario">Usuario *</label>
+            <input id="ad-usuario" name="usuario" required pattern="[A-Za-z0-9._-]{3,40}" maxlength="40" value="${esc(a.usuario || '')}" autocomplete="username">
+            <span class="ayuda">Mínimo 3 caracteres; sin espacios.</span></div>
+        </div>
+        <div class="campo"><label for="ad-clave">${esNuevo ? 'Contraseña inicial *' : 'Nueva contraseña (opcional)'}</label>
+          <input id="ad-clave" name="clave" type="password" ${esNuevo ? 'required minlength="6"' : 'minlength="6"'} autocomplete="new-password">
+          <span class="ayuda">${esNuevo ? 'Mínimo 6 caracteres. Comunícala de forma segura.' : 'Déjala vacía para conservar la actual.'}</span></div>
+        <fieldset class="campo" style="border:0;padding:0;margin:0"><legend style="font-size:.84rem;font-weight:620;margin-bottom:8px">Edificios asignados *</legend>
+          <div class="pila" style="gap:8px">${E.edificios.map((e) => `<label class="check"><input type="checkbox" name="edificioIds" value="${esc(e.id)}" ${asignados.has(e.id) ? 'checked' : ''}> ${esc(e.nombre)} <span class="mini tenue">· ${esc(e.ciudad || e.direccion || '')}</span></label>`).join('')}</div>
+        </fieldset>
+        ${esNuevo ? '' : `<label class="check"><input type="checkbox" name="activo" ${a.activo !== false ? 'checked' : ''}> Permitir iniciar sesión</label>`}
+      </form>`,
+      pie: `<button class="btn" type="button" data-cancelar>Cancelar</button>
+            <button class="btn btn-primario" type="button" data-guardar>${esNuevo ? 'Crear acceso' : 'Guardar cambios'}</button>`,
+    });
+    m.caja.querySelector('[data-cancelar]').addEventListener('click', m.cerrar);
+    m.caja.querySelector('[data-guardar]').addEventListener('click', async (ev) => {
+      const form = m.caja.querySelector('#f-administrador');
+      if (!form.reportValidity()) return;
+      const d = Object.fromEntries(new FormData(form).entries());
+      d.edificioIds = new FormData(form).getAll('edificioIds');
+      d.activo = esNuevo || form.querySelector('[name=activo]').checked;
+      if (!d.edificioIds.length) { nota('Selecciona al menos un edificio.', 'error'); return; }
+      ev.target.disabled = true;
+      try {
+        await operar(() => api(`/api/administradores${esNuevo ? '' : '/' + a.id}`, {
+          method: esNuevo ? 'POST' : 'PUT', body: d,
+        }), esNuevo ? 'Administrador creado' : 'Administrador actualizado');
+        m.cerrar();
+      } catch { ev.target.disabled = false; }
+    });
+  }
+
   /* ================================================================= Ajustes */
 
   function verAjustes() {
     const c = E.config;
     $('#v-ajustes').innerHTML = `
       <div class="dos-col">
+        ${esPrincipal() ? `
         <div class="bloque-panel">
           <header><div class="crece"><h3>Datos del sitio</h3>
             <p class="mini tenue" style="margin:2px 0 0">Aparecen en el encabezado, el pie y la sección de contacto.</p></div></header>
@@ -1612,17 +1714,21 @@
               <button class="btn btn-primario" type="submit">Guardar datos</button>
             </form>
           </div>
-        </div>
+        </div>` : `<div class="bloque-panel">
+          <header><div class="crece"><h3>Datos del sitio</h3>
+            <p class="mini tenue" style="margin:2px 0 0">Solo el propietario principal puede cambiar la información pública y la configuración global.</p></div></header>
+          <div class="cuerpo"><div class="aviso aviso-ojo">Tu acceso está limitado a los edificios que te fueron asignados.</div></div>
+        </div>`}
 
         <div class="pila" style="gap:20px">
           <div class="bloque-panel" style="margin:0">
             <header><div class="crece"><h3>Seguridad</h3>
               <p class="mini tenue" style="margin:2px 0 0">Credenciales de acceso al panel.</p></div></header>
             <div class="cuerpo">
-              ${c.claveInicial ? '<div class="aviso aviso-ojo" style="margin-bottom:14px">Sigues usando la contraseña inicial <strong>admin123</strong>. Cámbiala ahora.</div>' : ''}
+              ${E.sesion?.claveInicial ? '<div class="aviso aviso-ojo" style="margin-bottom:14px">Sigues usando la contraseña inicial <strong>admin123</strong>. Cámbiala ahora.</div>' : ''}
               <form id="f-clave" class="pila" style="gap:14px">
                 <div class="campo"><label for="cl-user">Usuario</label>
-                  <input id="cl-user" name="usuario" value="${esc(c.adminUsuario)}" autocomplete="username"></div>
+                  <input id="cl-user" name="usuario" value="${esc(E.sesion?.usuario || '')}" autocomplete="username"></div>
                 <div class="campo"><label for="cl-act">Contraseña actual</label>
                   <input id="cl-act" name="actual" type="password" required autocomplete="current-password"></div>
                 <div class="campo"><label for="cl-nue">Nueva contraseña</label>
@@ -1650,7 +1756,8 @@
         </div>
       </div>`;
 
-    $('#f-cfg').addEventListener('submit', async (ev) => {
+    const formConfig = $('#f-cfg');
+    if (formConfig) formConfig.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const d = Object.fromEntries(new FormData(ev.target).entries());
       await operar(() => api('/api/config', { method: 'PUT', body: d }), 'Datos del sitio guardados');

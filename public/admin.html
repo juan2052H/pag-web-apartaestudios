@@ -18,7 +18,7 @@
   <div class="acceso-caja">
     <div class="logo">◈</div>
     <h1>Panel administrativo</h1>
-    <p class="tenue mini">Gestiona unidades, videos, contratos y pagos.</p>
+    <p class="tenue mini">Ingresa como propietario principal o con tu cuenta de administrador de edificio.</p>
     <form id="form-acceso">
       <div class="campo">
         <label for="a-usuario">Usuario</label>
@@ -56,6 +56,7 @@
     <button class="nav-item" data-vista="mensajes"><span class="ic">☏</span> Mensajes<span class="globo" id="globo-mensajes" hidden>0</span></button>
     <button class="nav-item" data-vista="solicitudes"><span class="ic">✉</span> Solicitudes<span class="globo" id="globo-solicitudes" hidden>0</span></button>
     <button class="nav-item" data-vista="medios"><span class="ic">▶</span> Multimedia</button>
+    <button class="nav-item" data-vista="administradores" data-solo-principal hidden><span class="ic">♙</span> Administradores</button>
     <button class="nav-item" data-vista="ajustes"><span class="ic">⚙</span> Ajustes</button>
 
     <div class="pie-lateral">
@@ -71,6 +72,7 @@
         <h1 id="titulo-vista">Resumen</h1>
         <div class="sub" id="sub-vista"></div>
       </div>
+      <div class="sesion-rol mini" id="sesion-rol" hidden></div>
       <div class="barra-acciones" id="acciones-vista"></div>
       <button class="icono-btn" id="btn-tema" type="button" aria-label="Cambiar tema">☾</button>
     </div>
@@ -84,6 +86,7 @@
     <section class="vista" id="v-mensajes"></section>
     <section class="vista" id="v-solicitudes"></section>
     <section class="vista" id="v-medios"></section>
+    <section class="vista" id="v-administradores"></section>
     <section class="vista" id="v-ajustes"></section>
   </div>
 </div>

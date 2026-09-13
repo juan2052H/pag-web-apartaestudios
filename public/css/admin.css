@@ -64,7 +64,9 @@ body.admin { background: var(--plano); }
 }
 .barra-superior h1 { font-size: 1.3rem; letter-spacing: -.02em; }
 .barra-superior .sub { font-size: .84rem; color: var(--ink-3); margin-top: 1px; }
+.sesion-rol { margin-left: auto; padding: 5px 10px; border: 1px solid var(--linea); border-radius: 999px; color: var(--ink-2); background: var(--superficie); white-space: nowrap; }
 .barra-acciones { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sesion-rol + .barra-acciones { margin-left: 0; }
 
 .vista { padding: 24px 26px 60px; display: none; }
 .vista.activa { display: block; }

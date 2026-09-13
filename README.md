@@ -24,7 +24,7 @@ node server.js
 | Página de accesos | http://localhost:3000/acceso |
 | Panel administrativo | http://localhost:3000/admin |
 | Portal del inquilino | http://localhost:3000/inquilino |
-| Usuario inicial | `admin` |
+| Propietario inicial | `admin` |
 | Contraseña inicial | `admin123` — **cámbiala en Ajustes → Seguridad** |
 
 Para usar otro puerto: `PORT=8080 node server.js`.
@@ -66,7 +66,21 @@ contratos y su historial de pagos, para que puedas ver todo funcionando de una v
 | **Mensajes** | Envía avisos privados a un inquilino o a todos los inquilinos activos de un edificio: recordatorios de pago, convivencia/ruido, mantenimiento e información general. Incluye plantillas, prioridad, confirmación de lectura y seguimiento de tickets de mantenimiento (abierta → en proceso → resuelta). |
 | **Solicitudes** | Interesados que llegaron por el sitio, con estado (nueva → contactada → visita → cerrada). |
 | **Multimedia** | Todos los videos y fotos subidos, cuánto ocupan y en qué unidad se usan. |
-| **Ajustes** | Nombre del sitio, contacto, moneda, cambio de usuario y contraseña, exportaciones. |
+| **Administradores** | Solo el propietario: crea cuentas de administrador de edificio, les asigna uno o más edificios, pausa accesos, restablece claves y elimina cuentas. |
+| **Ajustes** | El propietario cambia nombre del sitio, contacto y moneda. Cada administrador puede cambiar únicamente su propio usuario y contraseña. |
+
+### Roles administrativos
+
+- **Propietario principal:** es la cuenta inicial y tiene visibilidad y control total
+  sobre todos los edificios, la configuración pública y las cuentas de acceso.
+- **Administrador de edificio:** solo ve y gestiona los edificios que el
+  propietario le asignó, con sus unidades, contratos, pagos, cartera, mensajes,
+  solicitudes y multimedia relacionada. No puede alterar la configuración global,
+  crear/eliminar edificios ni administrar otros usuarios.
+
+El propietario crea estas cuentas desde **Administradores → Nuevo administrador**
+y define una contraseña inicial segura para cada persona. Las contraseñas se
+guardan derivadas, nunca en texto plano.
 
 ## Portal del inquilino
 
